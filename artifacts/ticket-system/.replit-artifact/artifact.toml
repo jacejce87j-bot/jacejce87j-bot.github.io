@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Ticket Management System"
+version = "1.0.0"
+id = "artifacts/ticket-system"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23913
+
+[services.development]
+run = "pnpm --filter @workspace/ticket-system run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ticket-system", "run", "build" ]
+publicDir = "artifacts/ticket-system/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23913"
+BASE_PATH = "/"

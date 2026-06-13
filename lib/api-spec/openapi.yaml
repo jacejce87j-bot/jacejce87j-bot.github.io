@@ -1,15 +1,29 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Ticket Management System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: tickets
+    description: Ticket operations
+  - name: contacts
+    description: Contact operations
+  - name: organizations
+    description: Organization operations
+  - name: agents
+    description: Agent operations
+  - name: comments
+    description: Comment operations
+  - name: tags
+    description: Tag operations
+  - name: dashboard
+    description: Dashboard and analytics operations
+
 paths:
   /healthz:
     get:
@@ -24,6 +38,586 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── TICKETS ──────────────────────────────────────────────────
+  /tickets:
+    get:
+      operationId: listTickets
+      tags: [tickets]
+      summary: List tickets
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, pending, on_hold, solved, closed]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, normal, high, urgent]
+        - name: assigneeId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: organizationId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: contactId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, priority, dueAt]
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        "200":
+          description: Ticket list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketPage"
+    post:
+      operationId: createTicket
+      tags: [tickets]
+      summary: Create a ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketInput"
+      responses:
+        "201":
+          description: Created ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+
+  /tickets/{id}:
+    get:
+      operationId: getTicket
+      tags: [tickets]
+      summary: Get a ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateTicket
+      tags: [tickets]
+      summary: Update a ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketUpdate"
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+    delete:
+      operationId: deleteTicket
+      tags: [tickets]
+      summary: Delete a ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /tickets/{id}/comments:
+    get:
+      operationId: listTicketComments
+      tags: [comments]
+      summary: List comments for a ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Comment"
+    post:
+      operationId: createTicketComment
+      tags: [comments]
+      summary: Add a comment to a ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+
+  # ─── CONTACTS ─────────────────────────────────────────────────
+  /contacts:
+    get:
+      operationId: listContacts
+      tags: [contacts]
+      summary: List contacts
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: organizationId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+      responses:
+        "200":
+          description: Contact list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactPage"
+    post:
+      operationId: createContact
+      tags: [contacts]
+      summary: Create a contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactInput"
+      responses:
+        "201":
+          description: Created contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+
+  /contacts/{id}:
+    get:
+      operationId: getContact
+      tags: [contacts]
+      summary: Get a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateContact
+      tags: [contacts]
+      summary: Update a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactUpdate"
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+    delete:
+      operationId: deleteContact
+      tags: [contacts]
+      summary: Delete a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /contacts/{id}/tickets:
+    get:
+      operationId: listContactTickets
+      tags: [contacts]
+      summary: List tickets for a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ticket"
+
+  # ─── ORGANIZATIONS ────────────────────────────────────────────
+  /organizations:
+    get:
+      operationId: listOrganizations
+      tags: [organizations]
+      summary: List organizations
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+      responses:
+        "200":
+          description: Organization list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationPage"
+    post:
+      operationId: createOrganization
+      tags: [organizations]
+      summary: Create an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationInput"
+      responses:
+        "201":
+          description: Created organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+
+  /organizations/{id}:
+    get:
+      operationId: getOrganization
+      tags: [organizations]
+      summary: Get an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateOrganization
+      tags: [organizations]
+      summary: Update an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationUpdate"
+      responses:
+        "200":
+          description: Updated organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+    delete:
+      operationId: deleteOrganization
+      tags: [organizations]
+      summary: Delete an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── AGENTS ───────────────────────────────────────────────────
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      summary: List agents
+      responses:
+        "200":
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+    post:
+      operationId: createAgent
+      tags: [agents]
+      summary: Create an agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentInput"
+      responses:
+        "201":
+          description: Created agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+
+  /agents/{id}:
+    get:
+      operationId: getAgent
+      tags: [agents]
+      summary: Get an agent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+    patch:
+      operationId: updateAgent
+      tags: [agents]
+      summary: Update an agent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentUpdate"
+      responses:
+        "200":
+          description: Updated agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+
+  # ─── TAGS ─────────────────────────────────────────────────────
+  /tags:
+    get:
+      operationId: listTags
+      tags: [tags]
+      summary: List all tags
+      responses:
+        "200":
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+
+  # ─── DASHBOARD ────────────────────────────────────────────────
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Get recent activity feed
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Activity events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
+
+  /dashboard/ticket-volume:
+    get:
+      operationId: getTicketVolume
+      tags: [dashboard]
+      summary: Ticket volume over last 14 days
+      responses:
+        "200":
+          description: Daily counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyCount"
+
+  /dashboard/agent-workload:
+    get:
+      operationId: getAgentWorkload
+      tags: [dashboard]
+      summary: Open ticket count per agent
+      responses:
+        "200":
+          description: Agent workload
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentWorkload"
+
+  /dashboard/sla-health:
+    get:
+      operationId: getSlaHealth
+      tags: [dashboard]
+      summary: SLA breach summary
+      responses:
+        "200":
+          description: SLA health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlaHealth"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +625,481 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # ─── TICKET ───────────────────────────────────────────────
+    Ticket:
+      type: object
+      required: [id, subject, status, priority, type, channel, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        subject:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [open, pending, on_hold, solved, closed]
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        type:
+          type: string
+          enum: [question, incident, problem, task]
+        channel:
+          type: string
+          enum: [email, chat, phone, web, api]
+        assigneeId:
+          type: ["integer", "null"]
+        assignee:
+          $ref: "#/components/schemas/Agent"
+        requesterId:
+          type: ["integer", "null"]
+        requester:
+          $ref: "#/components/schemas/Contact"
+        organizationId:
+          type: ["integer", "null"]
+        organization:
+          $ref: "#/components/schemas/Organization"
+        tags:
+          type: array
+          items:
+            type: string
+        dueAt:
+          type: ["string", "null"]
+        firstResponseAt:
+          type: ["string", "null"]
+        resolvedAt:
+          type: ["string", "null"]
+        satisfaction:
+          type: ["string", "null"]
+          enum: [good, bad, null]
+        commentCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    TicketInput:
+      type: object
+      required: [subject, status, priority, type, channel]
+      properties:
+        subject:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, pending, on_hold, solved, closed]
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        type:
+          type: string
+          enum: [question, incident, problem, task]
+        channel:
+          type: string
+          enum: [email, chat, phone, web, api]
+        assigneeId:
+          type: ["integer", "null"]
+        requesterId:
+          type: ["integer", "null"]
+        organizationId:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        dueAt:
+          type: ["string", "null"]
+
+    TicketUpdate:
+      type: object
+      properties:
+        subject:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, pending, on_hold, solved, closed]
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        type:
+          type: string
+          enum: [question, incident, problem, task]
+        channel:
+          type: string
+          enum: [email, chat, phone, web, api]
+        assigneeId:
+          type: ["integer", "null"]
+        requesterId:
+          type: ["integer", "null"]
+        organizationId:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        dueAt:
+          type: ["string", "null"]
+        satisfaction:
+          type: ["string", "null"]
+
+    TicketPage:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ticket"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # ─── CONTACT ──────────────────────────────────────────────
+    Contact:
+      type: object
+      required: [id, name, email, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        organizationId:
+          type: ["integer", "null"]
+        organization:
+          $ref: "#/components/schemas/Organization"
+        role:
+          type: string
+          enum: [end_user, agent, admin]
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: ["string", "null"]
+        ticketCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    ContactInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+        phone:
+          type: string
+        organizationId:
+          type: ["integer", "null"]
+        role:
+          type: string
+          enum: [end_user, agent, admin]
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+
+    ContactUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        organizationId:
+          type: ["integer", "null"]
+        role:
+          type: string
+          enum: [end_user, agent, admin]
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: ["string", "null"]
+
+    ContactPage:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contact"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # ─── ORGANIZATION ─────────────────────────────────────────
+    Organization:
+      type: object
+      required: [id, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        domain:
+          type: ["string", "null"]
+        industry:
+          type: ["string", "null"]
+        plan:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        contactCount:
+          type: integer
+        ticketCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    OrganizationInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        domain:
+          type: string
+        industry:
+          type: string
+        plan:
+          type: string
+        notes:
+          type: string
+
+    OrganizationUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        domain:
+          type: ["string", "null"]
+        industry:
+          type: ["string", "null"]
+        plan:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    OrganizationPage:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organization"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # ─── AGENT ────────────────────────────────────────────────
+    Agent:
+      type: object
+      required: [id, name, email, role, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [agent, admin, supervisor]
+        avatarUrl:
+          type: ["string", "null"]
+        isOnline:
+          type: boolean
+        openTicketCount:
+          type: integer
+        createdAt:
+          type: string
+
+    AgentInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [agent, admin, supervisor]
+
+    AgentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [agent, admin, supervisor]
+        isOnline:
+          type: boolean
+
+    # ─── COMMENT ──────────────────────────────────────────────
+    Comment:
+      type: object
+      required: [id, ticketId, body, isPublic, createdAt]
+      properties:
+        id:
+          type: integer
+        ticketId:
+          type: integer
+        body:
+          type: string
+        isPublic:
+          type: boolean
+        authorId:
+          type: ["integer", "null"]
+        authorName:
+          type: ["string", "null"]
+        authorRole:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    CommentInput:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+        isPublic:
+          type: boolean
+        authorId:
+          type: ["integer", "null"]
+
+    # ─── TAG ──────────────────────────────────────────────────
+    Tag:
+      type: object
+      required: [id, name, color, ticketCount]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+        ticketCount:
+          type: integer
+
+    # ─── DASHBOARD ────────────────────────────────────────────
+    DashboardStats:
+      type: object
+      required: [openTickets, pendingTickets, solvedToday, urgentTickets, avgResponseTimeHours, satisfactionScore, slaBreach, unassigned]
+      properties:
+        openTickets:
+          type: integer
+        pendingTickets:
+          type: integer
+        solvedToday:
+          type: integer
+        urgentTickets:
+          type: integer
+        avgResponseTimeHours:
+          type: number
+        satisfactionScore:
+          type: number
+        slaBreach:
+          type: integer
+        unassigned:
+          type: integer
+
+    ActivityEvent:
+      type: object
+      required: [id, type, description, ticketId, agentName, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [ticket_created, ticket_updated, comment_added, status_changed, assignment_changed, ticket_solved]
+        description:
+          type: string
+        ticketId:
+          type: integer
+        ticketSubject:
+          type: ["string", "null"]
+        agentName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    DailyCount:
+      type: object
+      required: [date, created, solved]
+      properties:
+        date:
+          type: string
+        created:
+          type: integer
+        solved:
+          type: integer
+
+    AgentWorkload:
+      type: object
+      required: [agentId, agentName, openCount, urgentCount]
+      properties:
+        agentId:
+          type: integer
+        agentName:
+          type: string
+        openCount:
+          type: integer
+        urgentCount:
+          type: integer
+
+    SlaHealth:
+      type: object
+      required: [onTrack, atRisk, breached, total]
+      properties:
+        onTrack:
+          type: integer
+        atRisk:
+          type: integer
+        breached:
+          type: integer
+        total:
+          type: integer

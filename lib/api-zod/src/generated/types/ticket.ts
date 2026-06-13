@@ -41,6 +41,8 @@ export interface Ticket {
   resolvedAt?: string | null;
   /** @nullable */
   satisfaction?: TicketSatisfaction;
+  /** @nullable */
+  mergedIntoId?: number | null;
   commentCount?: number;
   createdAt: string;
   updatedAt: string;

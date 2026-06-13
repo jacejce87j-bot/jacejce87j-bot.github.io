@@ -111,6 +111,7 @@ function serializeTicket(
     firstResponseAt: t.firstResponseAt?.toISOString() ?? null,
     resolvedAt: t.resolvedAt?.toISOString() ?? null,
     satisfaction: t.satisfaction,
+    mergedIntoId: t.mergedIntoId ?? null,
     commentCount,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
@@ -307,6 +308,73 @@ router.patch("/:id", async (req, res) => {
   }
 
   res.json(serializeTicket(ticket, agent, contact, org, Number(ccRow?.cnt ?? 0)));
+});
+
+// ─── MERGE TICKET ─────────────────────────────────────────────────────────────
+router.post("/:id/merge", async (req, res) => {
+  const sourceId = Number(req.params.id);
+  const { targetTicketId } = req.body as { targetTicketId: number };
+
+  if (!targetTicketId || typeof targetTicketId !== "number") {
+    return res.status(400).json({ error: "targetTicketId is required" });
+  }
+  if (sourceId === targetTicketId) {
+    return res.status(400).json({ error: "Cannot merge a ticket into itself" });
+  }
+
+  const [[source], [target]] = await Promise.all([
+    db.select().from(ticketsTable).where(eq(ticketsTable.id, sourceId)),
+    db.select().from(ticketsTable).where(eq(ticketsTable.id, targetTicketId)),
+  ]);
+
+  if (!source) return res.status(404).json({ error: "Source ticket not found" });
+  if (!target) return res.status(404).json({ error: "Target ticket not found" });
+  if (source.mergedIntoId) {
+    return res.status(400).json({ error: "Source ticket has already been merged" });
+  }
+
+  // Move all comments from source → target
+  await db
+    .update(commentsTable)
+    .set({ ticketId: targetTicketId })
+    .where(eq(commentsTable.ticketId, sourceId));
+
+  // Move all activity events from source → target
+  await db
+    .update(activityEventsTable)
+    .set({ ticketId: targetTicketId })
+    .where(eq(activityEventsTable.ticketId, sourceId));
+
+  // Close the source ticket and record the merge
+  await db
+    .update(ticketsTable)
+    .set({ status: "closed", mergedIntoId: targetTicketId, resolvedAt: new Date() })
+    .where(eq(ticketsTable.id, sourceId));
+
+  // Log the merge on the target ticket
+  await db.insert(activityEventsTable).values({
+    type: "ticket_created",
+    description: `Ticket #${sourceId} ("${source.subject}") was merged into this ticket`,
+    ticketId: targetTicketId,
+  });
+
+  broadcast({
+    type: "ticket:status_changed",
+    ticketId: sourceId,
+    subject: source.subject,
+    oldStatus: source.status,
+    newStatus: "closed",
+  });
+
+  // Return the updated target ticket
+  const [agent, contact, org, ccRow] = await Promise.all([
+    target.assigneeId ? db.select().from(agentsTable).where(eq(agentsTable.id, target.assigneeId)).then((r) => r[0]) : null,
+    target.requesterId ? db.select().from(contactsTable).where(eq(contactsTable.id, target.requesterId)).then((r) => r[0]) : null,
+    target.organizationId ? db.select().from(organizationsTable).where(eq(organizationsTable.id, target.organizationId)).then((r) => r[0]) : null,
+    db.select({ cnt: count() }).from(commentsTable).where(eq(commentsTable.ticketId, targetTicketId)).then((r) => r[0]),
+  ]);
+
+  res.json(serializeTicket(target, agent, contact, org, Number(ccRow?.cnt ?? 0)));
 });
 
 // ─── DELETE TICKET ────────────────────────────────────────────────────────────

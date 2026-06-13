@@ -154,9 +154,16 @@ export interface Ticket {
   resolvedAt?: string | null;
   /** @nullable */
   satisfaction?: TicketSatisfaction;
+  /** @nullable */
+  mergedIntoId?: number | null;
   commentCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TicketMergeInput {
+  /** ID of the ticket to merge this ticket into */
+  targetTicketId: number;
 }
 
 export type TicketInputStatus = typeof TicketInputStatus[keyof typeof TicketInputStatus];

@@ -46,6 +46,7 @@ import type {
   Tag,
   Ticket,
   TicketInput,
+  TicketMergeInput,
   TicketPage,
   TicketUpdate
 } from './api.schemas';
@@ -512,6 +513,79 @@ export const useDeleteTicket = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteTicketMutationOptions(options));
+    }
+
+export const getMergeTicketUrl = (id: number,) => {
+
+
+
+
+  return `/api/tickets/${id}/merge`
+}
+
+/**
+ * Moves all comments and activity from the source ticket into the target ticket, then closes the source ticket.
+ * @summary Merge a ticket into another ticket
+ */
+export const mergeTicket = async (id: number,
+    ticketMergeInput: TicketMergeInput, options?: RequestInit): Promise<Ticket> => {
+
+  return customFetch<Ticket>(getMergeTicketUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ticketMergeInput,)
+  }
+);}
+
+
+
+
+export const getMergeTicketMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeTicket>>, TError,{id: number;data: BodyType<TicketMergeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeTicket>>, TError,{id: number;data: BodyType<TicketMergeInput>}, TContext> => {
+
+const mutationKey = ['mergeTicket'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeTicket>>, {id: number;data: BodyType<TicketMergeInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  mergeTicket(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeTicketMutationResult = NonNullable<Awaited<ReturnType<typeof mergeTicket>>>
+    export type MergeTicketMutationBody = BodyType<TicketMergeInput>
+    export type MergeTicketMutationError = ErrorType<void>
+
+    /**
+ * @summary Merge a ticket into another ticket
+ */
+export const useMergeTicket = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeTicket>>, TError,{id: number;data: BodyType<TicketMergeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mergeTicket>>,
+        TError,
+        {id: number;data: BodyType<TicketMergeInput>},
+        TContext
+      > => {
+      return useMutation(getMergeTicketMutationOptions(options));
     }
 
 export const getListTicketCommentsUrl = (id: number,) => {

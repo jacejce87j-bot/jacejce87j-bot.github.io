@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { 
@@ -10,17 +10,18 @@ import {
   useCreateTicketComment,
   getListTicketsQueryKey
 } from "@workspace/api-client-react";
-import { TicketStatus, TicketPriority, TicketType, TicketChannel } from "@workspace/api-client-react/src/generated/api.schemas";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { TicketStatus, TicketPriority } from "@workspace/api-client-react/src/generated/api.schemas";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils";
-import { ArrowLeft, Clock, MessageSquare, Send, CheckCircle2, Lock, Globe } from "lucide-react";
+import { ArrowLeft, Clock, Send, CheckCircle2, Lock, Globe, GitMerge, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { MergeTicketDialog } from "@/components/merge-ticket-dialog";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
@@ -64,6 +65,7 @@ export default function TicketDetail() {
 
   const [newComment, setNewComment] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
 
   const handleStatusChange = (status: TicketStatus) => {
     updateTicket.mutate({ id: ticketId, data: { status } });
@@ -124,13 +126,41 @@ export default function TicketDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {ticket.status !== 'solved' && ticket.status !== 'closed' && (
-              <Button onClick={() => handleStatusChange('solved')} variant="outline" className="text-green-600 hover:text-green-700 hover:bg-green-50">
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Solved
-              </Button>
+            {ticket.status !== 'solved' && ticket.status !== 'closed' && !ticket.mergedIntoId && (
+              <>
+                <Button
+                  onClick={() => setMergeDialogOpen(true)}
+                  variant="outline"
+                  className="text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950"
+                >
+                  <GitMerge className="mr-2 h-4 w-4" /> Merge
+                </Button>
+                <Button onClick={() => handleStatusChange('solved')} variant="outline" className="text-green-600 hover:text-green-700 hover:bg-green-50">
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Solved
+                </Button>
+              </>
             )}
           </div>
         </div>
+
+        {/* Merged-into banner */}
+        {ticket.mergedIntoId && (
+          <div className="bg-violet-50 dark:bg-violet-950/40 border-b border-violet-200 dark:border-violet-800 px-8 py-3 flex items-center gap-3">
+            <GitMerge className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
+            <span className="text-sm text-violet-800 dark:text-violet-200">
+              This ticket was merged into{" "}
+              <Link href={`/tickets/${ticket.mergedIntoId}`} className="font-semibold underline hover:no-underline">
+                Ticket #{ticket.mergedIntoId}
+              </Link>
+              {" "}and is now closed.
+            </span>
+            <Link href={`/tickets/${ticket.mergedIntoId}`}>
+              <Button size="sm" variant="outline" className="ml-auto border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900">
+                View Target <ArrowRight className="ml-1 h-3 w-3" />
+              </Button>
+            </Link>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
@@ -388,6 +418,12 @@ export default function TicketDetail() {
           </div>
         </div>
       </div>
+      <MergeTicketDialog
+        open={mergeDialogOpen}
+        onOpenChange={setMergeDialogOpen}
+        sourceTicketId={ticketId}
+        sourceSubject={ticket.subject}
+      />
     </AppLayout>
   );
 }

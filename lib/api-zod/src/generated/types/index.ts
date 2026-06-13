@@ -48,6 +48,7 @@ export * from './ticketInputChannel';
 export * from './ticketInputPriority';
 export * from './ticketInputStatus';
 export * from './ticketInputType';
+export * from './ticketMergeInput';
 export * from './ticketPage';
 export * from './ticketPriority';
 export * from './ticketSatisfaction';

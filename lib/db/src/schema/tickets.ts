@@ -21,6 +21,7 @@ export const ticketsTable = pgTable("tickets", {
   firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   satisfaction: text("satisfaction"),
+  mergedIntoId: integer("merged_into_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

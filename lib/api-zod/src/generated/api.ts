@@ -100,6 +100,7 @@ export const ListTicketsResponse = zod.object({
   "firstResponseAt": zod.string().nullish(),
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -201,6 +202,7 @@ export const GetTicketResponse = zod.object({
   "firstResponseAt": zod.string().nullish(),
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -295,6 +297,7 @@ export const UpdateTicketResponse = zod.object({
   "firstResponseAt": zod.string().nullish(),
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -306,6 +309,88 @@ export const UpdateTicketResponse = zod.object({
  */
 export const DeleteTicketParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * Moves all comments and activity from the source ticket into the target ticket, then closes the source ticket.
+ * @summary Merge a ticket into another ticket
+ */
+export const MergeTicketParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MergeTicketBody = zod.object({
+  "targetTicketId": zod.number().describe('ID of the ticket to merge this ticket into')
+})
+
+export const MergeTicketResponse = zod.object({
+  "id": zod.number(),
+  "subject": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['open', 'pending', 'on_hold', 'solved', 'closed']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "type": zod.enum(['question', 'incident', 'problem', 'task']),
+  "channel": zod.enum(['email', 'chat', 'phone', 'web', 'api']),
+  "assigneeId": zod.number().nullish(),
+  "assignee": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['agent', 'admin', 'supervisor']),
+  "avatarUrl": zod.string().nullish(),
+  "isOnline": zod.boolean().optional(),
+  "openTicketCount": zod.number().optional(),
+  "createdAt": zod.string()
+}).optional(),
+  "requesterId": zod.number().nullish(),
+  "requester": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "role": zod.enum(['end_user', 'agent', 'admin']).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "notes": zod.string().nullish(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "dueAt": zod.string().nullish(),
+  "firstResponseAt": zod.string().nullish(),
+  "resolvedAt": zod.string().nullish(),
+  "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
+  "commentCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 
 
@@ -564,6 +649,7 @@ export const ListContactTicketsResponseItem = zod.object({
   "firstResponseAt": zod.string().nullish(),
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()

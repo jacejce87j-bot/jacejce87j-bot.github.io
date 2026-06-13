@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { broadcast } from "../lib/ws-manager";
 import { db } from "@workspace/db";
 import {
   ticketsTable,
@@ -214,6 +215,14 @@ router.post("/", async (req, res) => {
     agentId: body.assigneeId ?? null,
   });
 
+  broadcast({
+    type: "ticket:created",
+    ticketId: ticket.id,
+    subject: ticket.subject,
+    priority: ticket.priority,
+    assigneeId: ticket.assigneeId,
+  });
+
   res.status(201).json(serializeTicket(ticket, null, null, null, 0));
 });
 
@@ -245,7 +254,10 @@ router.patch("/:id", async (req, res) => {
   if (body.dueAt !== undefined) updates.dueAt = body.dueAt ? new Date(body.dueAt) : null;
 
   // Track status changes
+  let statusChanged = false;
+  let assigneeChanged = false;
   if (body.status && body.status !== existing.status) {
+    statusChanged = true;
     if (body.status === "solved" || body.status === "closed") {
       updates.resolvedAt = new Date();
     }
@@ -257,6 +269,7 @@ router.patch("/:id", async (req, res) => {
   }
 
   if (body.assigneeId !== undefined && body.assigneeId !== existing.assigneeId) {
+    assigneeChanged = true;
     await db.insert(activityEventsTable).values({
       type: "assignment_changed",
       description: `Ticket reassigned`,
@@ -273,6 +286,25 @@ router.patch("/:id", async (req, res) => {
     ticket.organizationId ? db.select().from(organizationsTable).where(eq(organizationsTable.id, ticket.organizationId)).then((r) => r[0]) : null,
     db.select({ cnt: count() }).from(commentsTable).where(eq(commentsTable.ticketId, id)).then((r) => r[0]),
   ]);
+
+  if (statusChanged) {
+    broadcast({
+      type: "ticket:status_changed",
+      ticketId: ticket.id,
+      subject: ticket.subject,
+      oldStatus: existing.status,
+      newStatus: ticket.status,
+    });
+  }
+  if (assigneeChanged && agent) {
+    broadcast({
+      type: "ticket:assigned",
+      ticketId: ticket.id,
+      subject: ticket.subject,
+      agentId: agent.id,
+      agentName: agent.name,
+    });
+  }
 
   res.json(serializeTicket(ticket, agent, contact, org, Number(ccRow?.cnt ?? 0)));
 });
@@ -341,6 +373,14 @@ router.post("/:id/comments", async (req, res) => {
   });
 
   const author = body.authorId ? (await db.select().from(agentsTable).where(eq(agentsTable.id, body.authorId)))[0] : null;
+
+  broadcast({
+    type: "comment:added",
+    ticketId: id,
+    subject: ticket.subject,
+    authorName: author?.name ?? null,
+    isPublic: body.isPublic ?? true,
+  });
 
   res.status(201).json({
     id: comment.id,

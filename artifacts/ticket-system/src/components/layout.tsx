@@ -8,6 +8,7 @@ import {
   Settings,
   Headset,
 } from "lucide-react";
+import { NotificationBell } from "./notification-bell";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -28,8 +29,9 @@ export function AppLayout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <nav className="w-64 border-r border-border bg-sidebar flex-shrink-0 flex flex-col">
-        <div className="h-14 flex items-center px-6 border-b border-sidebar-border">
+        <div className="h-14 flex items-center justify-between px-6 border-b border-sidebar-border">
           <span className="font-bold text-lg text-sidebar-foreground tracking-tight">SupportDesk</span>
+          <NotificationBell />
         </div>
         <div className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1 px-3">
@@ -39,8 +41,8 @@ export function AppLayout({ children }: LayoutProps) {
                 <li key={item.href}>
                   <Link href={item.href} className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                    isActive 
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )}>
                     <item.icon className="h-4 w-4" />

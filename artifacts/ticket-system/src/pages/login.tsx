@@ -1,10 +1,11 @@
 import { useAuth } from "@workspace/replit-auth-web";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Headset, ShieldCheck } from "lucide-react";
+import { Headset, ShieldCheck, TriangleAlert } from "lucide-react";
 
 export default function Login() {
   const { login, isLoading } = useAuth();
+  const authError = new URLSearchParams(window.location.search).get("authError");
 
   return (
     <main className="min-h-screen bg-muted/30 px-6 py-12">
@@ -26,12 +27,25 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 pb-8">
+            {authError && (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  We couldn’t complete sign-in. Please start again and finish the
+                  login in the new browser tab.
+                </span>
+              </div>
+            )}
             <Button className="w-full" size="lg" onClick={login} disabled={isLoading}>
               {isLoading ? "Checking session..." : "Log in"}
             </Button>
             <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span>Your session protects workspace data and private ticket attachments.</span>
+              <span>
+                Sign-in opens in the full Preview window so the secure account
+                handoff can complete. If prompted, allow pop-ups from the
+                authentication provider.
+              </span>
             </div>
           </CardContent>
         </Card>

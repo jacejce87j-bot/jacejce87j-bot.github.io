@@ -58,6 +58,11 @@ function getSafeReturnTo(value: unknown): string {
   return value;
 }
 
+function getErrorReturnTo(returnTo: string, errorCode: string): string {
+  const separator = returnTo.includes('?') ? '&' : '?';
+  return `${returnTo}${separator}authError=${encodeURIComponent(errorCode)}`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -161,13 +166,24 @@ router.get('/login', async (req: Request, res: Response) => {
 router.get('/callback', async (req: Request, res: Response) => {
   const config = await getOidcConfig();
   const callbackUrl = `${getOrigin(req)}/api/callback`;
+  const returnTo = getSafeReturnTo(req.cookies?.return_to);
 
   const codeVerifier = req.cookies?.code_verifier;
   const nonce = req.cookies?.nonce;
   const expectedState = req.cookies?.state;
 
+  if (typeof req.query.error === 'string') {
+    req.log.warn(
+      { providerError: req.query.error },
+      'OIDC provider returned an authentication error',
+    );
+    res.redirect(getErrorReturnTo(returnTo, 'provider_denied'));
+    return;
+  }
+
   if (!codeVerifier || !expectedState) {
-    res.redirect('/api/login');
+    req.log.warn('OIDC callback is missing its PKCE state cookies');
+    res.redirect(getErrorReturnTo(returnTo, 'missing_state'));
     return;
   }
 
@@ -183,12 +199,14 @@ router.get('/callback', async (req: Request, res: Response) => {
       expectedState,
       idTokenExpected: true,
     });
-  } catch {
-    res.redirect('/api/login');
+  } catch (error) {
+    req.log.warn(
+      { err: getSafeErrorMetadata(error) },
+      'OIDC callback token exchange failed',
+    );
+    res.redirect(getErrorReturnTo(returnTo, 'callback_failed'));
     return;
   }
-
-  const returnTo = getSafeReturnTo(req.cookies?.return_to);
 
   res.clearCookie('code_verifier', { path: '/' });
   res.clearCookie('nonce', { path: '/' });
@@ -197,7 +215,8 @@ router.get('/callback', async (req: Request, res: Response) => {
 
   const claims = tokens.claims();
   if (!claims) {
-    res.redirect('/api/login');
+    req.log.warn('OIDC callback completed without ID token claims');
+    res.redirect(getErrorReturnTo(returnTo, 'missing_claims'));
     return;
   }
 

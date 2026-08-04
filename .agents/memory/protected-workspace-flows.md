@@ -8,3 +8,9 @@ Any endpoint protected by the session must have a corresponding user-facing logi
 **Why:** A server-side 401 is secure but produces a broken-feeling feature when the UI has no login path; this surfaced with SLA editing and ticket uploads.
 
 **How to apply:** Add the auth boundary before protected workspace routes, use the shared browser auth hook, and verify both the unauthenticated screen and authenticated mutation path.
+
+In Replit Preview, start browser auth from the top-level development URL rather than leaving the OIDC provider inside the embedded artifact iframe.
+
+**Why:** The provider’s development-testing interstitial can keep the account handoff from completing when the artifact remains nested in the preview frame.
+
+**How to apply:** Promote login/logout navigation to `window.top` when the app detects it is embedded; retain same-window navigation when running as a top-level page.

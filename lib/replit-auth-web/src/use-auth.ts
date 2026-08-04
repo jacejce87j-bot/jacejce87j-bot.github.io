@@ -16,6 +16,18 @@ function getBasePath() {
   return baseUrl.replace(/\/+$/, '') || '/';
 }
 
+function navigateTopLevel(url: string) {
+  // Replit Preview renders artifacts inside an iframe. The auth provider
+  // requires the development URL to be the top-level browser page, otherwise
+  // its account handoff can remain stuck on the preview testing interstitial.
+  if (window.top && window.top !== window) {
+    window.top.location.href = url;
+    return;
+  }
+
+  window.location.assign(url);
+}
+
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,12 +60,20 @@ export function useAuth(): AuthState {
 
   const login = useCallback(() => {
     const base = getBasePath();
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
+    const loginUrl = new URL(
+      `/api/login?returnTo=${encodeURIComponent(base)}`,
+      window.location.origin,
+    ).href;
+    navigateTopLevel(loginUrl);
   }, []);
 
   const logout = useCallback(() => {
     const base = getBasePath();
-    window.location.href = `/api/logout?returnTo=${encodeURIComponent(base)}`;
+    const logoutUrl = new URL(
+      `/api/logout?returnTo=${encodeURIComponent(base)}`,
+      window.location.origin,
+    ).href;
+    navigateTopLevel(logoutUrl);
   }, []);
 
   return {

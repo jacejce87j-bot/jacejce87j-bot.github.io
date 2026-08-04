@@ -16,8 +16,10 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
 import {
+  getListTicketTemplatesQueryKey,
   useCreateMobileTicket,
   useListAgents,
+  useListTicketTemplates,
   useRequestUploadUrl,
   type TicketAttachment,
 } from '@workspace/api-client-react';
@@ -32,6 +34,13 @@ export default function NewTicketScreen() {
   const { user } = useUser();
   const createTicket = useCreateMobileTicket();
   const agentsQuery = useListAgents();
+  const templatesQuery = useListTicketTemplates({
+    query: {
+      queryKey: getListTicketTemplatesQueryKey(),
+      refetchOnMount: true,
+      staleTime: 0,
+    },
+  });
   const requestUpload = useRequestUploadUrl();
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
@@ -41,12 +50,21 @@ export default function NewTicketScreen() {
   const [uploadError, setUploadError] = useState('');
   const [createError, setCreateError] = useState('');
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<number | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
 
   const signedInEmail = user?.emailAddresses[0]?.emailAddress?.trim().toLowerCase();
   const currentAgent = agentsQuery.data?.find(
     (agent) => agent.email.trim().toLowerCase() === signedInEmail,
   );
   const effectiveAssigneeId = selectedAssigneeId ?? currentAgent?.id;
+  const activeTemplates = (templatesQuery.data ?? []).filter((template) => template.isActive);
+
+  const selectTemplate = (templateId: number) => {
+    const template = activeTemplates.find((candidate) => candidate.id === templateId);
+    if (!template) return;
+    setSelectedTemplateId(template.id);
+    setDescription(template.description);
+  };
 
   const addAttachment = async () => {
     try {
@@ -102,6 +120,54 @@ export default function NewTicketScreen() {
           <Text style={[styles.label, { color: colors.foreground }]}>Subject</Text>
           <TextInput style={[styles.input, { color: colors.foreground, borderColor: colors.input, backgroundColor: colors.card }]} value={subject} onChangeText={setSubject} placeholder="What needs attention?" placeholderTextColor={colors.mutedForeground} />
           <Text style={[styles.label, { color: colors.foreground }]}>Description</Text>
+          {templatesQuery.isLoading ? (
+            <View style={styles.templateLoading}>
+              <ActivityIndicator color={colors.primary} size="small" />
+              <Text style={[styles.helper, { color: colors.mutedForeground }]}>Loading templates…</Text>
+            </View>
+          ) : templatesQuery.isError ? (
+            <Text style={[styles.helper, { color: colors.mutedForeground }]}>
+              Templates could not be loaded. You can still write a description manually.
+            </Text>
+          ) : activeTemplates.length > 0 ? (
+            <View style={[styles.templateCard, { backgroundColor: colors.accent, borderColor: colors.border }]}>
+              <View style={styles.templateHeader}>
+                <View style={styles.templateTitleRow}>
+                  <Feather name="file-text" size={16} color={colors.primary} />
+                  <Text style={[styles.templateTitle, { color: colors.foreground }]}>Use a template</Text>
+                </View>
+                <Text style={[styles.templateOptional, { color: colors.mutedForeground }]}>Optional</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.templateRow}>
+                {activeTemplates.map((template) => {
+                  const isSelected = selectedTemplateId === template.id;
+                  return (
+                    <Pressable
+                      key={template.id}
+                      onPress={() => selectTemplate(template.id)}
+                      style={[
+                        styles.templateChip,
+                        {
+                          backgroundColor: isSelected ? colors.primary : colors.card,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.templateChipText, { color: isSelected ? '#fff' : colors.mutedForeground }]}
+                      >
+                        {template.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Text style={[styles.templateHint, { color: colors.mutedForeground }]}>
+                Selecting a template fills only the Description field. You can edit it before creating the ticket.
+              </Text>
+            </View>
+          ) : null}
           <TextInput style={[styles.input, styles.textarea, { color: colors.foreground, borderColor: colors.input, backgroundColor: colors.card }]} value={description} onChangeText={setDescription} placeholder="Add useful context for the team..." placeholderTextColor={colors.mutedForeground} multiline textAlignVertical="top" />
           <Text style={[styles.label, { color: colors.foreground }]}>Priority</Text>
           <View style={styles.priorityRow}>
@@ -183,6 +249,16 @@ const styles = StyleSheet.create({
   assignee: { borderRadius: 18, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
   assigneeText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   helper: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
+  templateLoading: { alignItems: 'center', flexDirection: 'row', gap: 8, marginBottom: 10 },
+  templateCard: { borderRadius: 10, borderWidth: 1, marginBottom: 10, padding: 12 },
+  templateHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  templateTitleRow: { alignItems: 'center', flexDirection: 'row', gap: 7 },
+  templateTitle: { fontFamily: 'Inter_700Bold', fontSize: 13 },
+  templateOptional: { fontFamily: 'Inter_400Regular', fontSize: 11 },
+  templateRow: { flexDirection: 'row', gap: 8, paddingTop: 11 },
+  templateChip: { borderRadius: 18, borderWidth: 1, maxWidth: 190, paddingHorizontal: 12, paddingVertical: 9 },
+  templateChipText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  templateHint: { fontFamily: 'Inter_400Regular', fontSize: 11, lineHeight: 16, marginTop: 10 },
   attachButton: { alignItems: 'center', borderRadius: 10, borderWidth: 1, flexDirection: 'row', gap: 9, justifyContent: 'center', marginTop: 26, minHeight: 50 },
   attachText: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   inlineError: { fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 18, marginTop: 9 },

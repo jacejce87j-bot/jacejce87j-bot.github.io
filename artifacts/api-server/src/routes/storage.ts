@@ -117,6 +117,11 @@ router.get(
  * be protected with authentication or ACL checks based on the use case.
  */
 router.get('/storage/objects/*path', async (req: Request, res: Response) => {
+  if (!hasAuthenticatedSession(req)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join('/') : raw;

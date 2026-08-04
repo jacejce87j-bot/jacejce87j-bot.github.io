@@ -13,12 +13,15 @@ import TicketDetail from "@/pages/tickets/[id]";
 import NewTicket from "@/pages/tickets/new";
 import ContactDetail from "@/pages/contacts/[id]";
 import OrganizationDetail from "@/pages/organizations/[id]";
+import Login from "@/pages/login";
+import { useAuth } from "@workspace/replit-auth-web";
 
 const queryClient = new QueryClient();
 
 function Router() {
   return (
     <Switch>
+      <Route path="/login" component={Login} />
       <Route path="/" component={Dashboard} />
       <Route path="/tickets" component={TicketList} />
       <Route path="/tickets/new" component={NewTicket} />
@@ -34,12 +37,30 @@ function Router() {
   );
 }
 
+function AuthGate() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-muted/30">
+        <div className="text-sm text-muted-foreground">Checking your session...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
+  return <Router />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AuthGate />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

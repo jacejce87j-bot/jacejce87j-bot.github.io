@@ -7,8 +7,10 @@ import {
   Building2,
   Settings,
   Headset,
+  LogOut,
 } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
+import { useAuth } from "@workspace/replit-auth-web";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,6 +18,7 @@ interface LayoutProps {
 
 export function AppLayout({ children }: LayoutProps) {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
 
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -52,6 +55,22 @@ export function AppLayout({ children }: LayoutProps) {
               );
             })}
           </ul>
+        </div>
+        <div className="border-t border-sidebar-border p-3">
+          <div className="mb-2 rounded-md px-3 py-2">
+            <div className="truncate text-sm font-medium text-sidebar-foreground">
+              {[user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Support user"}
+            </div>
+            <div className="truncate text-xs text-sidebar-foreground/60">{user?.email || "Signed in"}</div>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+            Log out
+          </button>
         </div>
       </nav>
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">

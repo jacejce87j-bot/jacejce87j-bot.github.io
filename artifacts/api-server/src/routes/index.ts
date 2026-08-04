@@ -9,12 +9,14 @@ import dashboardRouter from "./dashboard";
 import authRouter from "./auth";
 import storageRouter from "./storage";
 import settingsRouter from "./settings";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(storageRouter);
+router.use(requireAuth);
 router.use("/tickets", ticketsRouter);
 router.use("/contacts", contactsRouter);
 router.use("/organizations", organizationsRouter);

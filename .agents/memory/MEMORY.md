@@ -1,3 +1,4 @@
 - [Drizzle array queries](drizzle-array-queries.md) — use inArray(col, ids) for batch lookups; raw sql ANY() breaks with array params in Drizzle
 - [CSS import order](css-import-order.md) — Google Fonts @import url() must precede all other @import statements or PostCSS throws
 - [OpenAPI regeneration safety](openapi-regeneration-safety.md) — validate YAML before codegen because Orval cleans generated clients before failing on invalid specs
+- [Protected workspace flows](protected-workspace-flows.md) — protected uploads and admin settings need a visible auth gate, not only server-side 401 checks

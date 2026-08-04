@@ -11,6 +11,13 @@ import {
   type SessionData,
 } from '../lib/auth';
 
+function normalizeSessionUser(user: SessionData['user']): SessionData['user'] {
+  return {
+    ...user,
+    role: user.role ?? 'admin',
+  };
+}
+
 declare global {
   namespace Express {
     interface User extends AuthUser {}
@@ -80,6 +87,7 @@ export async function authMiddleware(
     return;
   }
 
+  refreshed.user = normalizeSessionUser(refreshed.user);
   req.user = refreshed.user;
   next();
 }

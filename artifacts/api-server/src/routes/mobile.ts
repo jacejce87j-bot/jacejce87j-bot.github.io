@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import {
   CreateMobileTicketBody,
+  CreateMobileTicketCommentBody,
   GetMobileTicketParams,
   ListMobileTicketsQueryParams,
   UpdateMobileTicketBody,
@@ -77,6 +78,42 @@ async function serializeSingleTicket(ticket: typeof ticketsTable.$inferSelect) {
   return serialized;
 }
 
+async function getAssignedTicket(id: number, agentId: number) {
+  const [ticket] = await db
+    .select()
+    .from(ticketsTable)
+    .where(and(eq(ticketsTable.id, id), eq(ticketsTable.assigneeId, agentId)));
+  return ticket ?? null;
+}
+
+async function serializeComments(ticketId: number) {
+  const comments = await db
+    .select()
+    .from(commentsTable)
+    .where(eq(commentsTable.ticketId, ticketId))
+    .orderBy(asc(commentsTable.createdAt));
+  const authorIds = [...new Set(comments.map((comment) => comment.authorId).filter(Boolean))] as number[];
+  const authors = authorIds.length
+    ? await db.select().from(agentsTable).where(inArray(agentsTable.id, authorIds))
+    : [];
+  const authorMap = new Map(authors.map((author) => [author.id, author]));
+
+  return comments.map((comment) => {
+    const author = comment.authorId ? authorMap.get(comment.authorId) : null;
+    return {
+      id: comment.id,
+      ticketId: comment.ticketId,
+      body: comment.body,
+      isPublic: comment.isPublic,
+      authorId: comment.authorId,
+      authorName: author?.name ?? null,
+      authorRole: author?.role ?? null,
+      attachments: comment.attachments ?? [],
+      createdAt: comment.createdAt.toISOString(),
+    };
+  });
+}
+
 router.get("/tickets", async (req, res) => {
   const agent = await getSignedInAgent(req);
   if (!agent) {
@@ -122,11 +159,24 @@ router.post("/tickets", async (req, res) => {
   }
 
   const body = CreateMobileTicketBody.parse(req.body);
+  const { assigneeId, ...ticketBody } = body;
+  const targetAgentId = assigneeId ?? agent.id;
+  if (targetAgentId !== agent.id) {
+    const [targetAgent] = await db
+      .select({ id: agentsTable.id })
+      .from(agentsTable)
+      .where(eq(agentsTable.id, targetAgentId));
+    if (!targetAgent) {
+      res.status(400).json({ error: "Selected assignee was not found" });
+      return;
+    }
+  }
+
   const [ticket] = await db
     .insert(ticketsTable)
     .values({
-      ...body,
-      assigneeId: agent.id,
+      ...ticketBody,
+      assigneeId: targetAgentId,
       attachments: body.attachments ?? [],
     })
     .returning();
@@ -214,6 +264,66 @@ router.patch("/tickets/:id", async (req, res) => {
   }
 
   res.json(await serializeSingleTicket(ticket));
+});
+
+router.get("/tickets/:id/comments", async (req, res) => {
+  const agent = await getSignedInAgent(req);
+  if (!agent) {
+    res.status(403).json({ error: "Your SupportDesk account is not linked to an agent" });
+    return;
+  }
+  const { id } = GetMobileTicketParams.parse({ id: Number(req.params.id) });
+  const ticket = await getAssignedTicket(id, agent.id);
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+  res.json(await serializeComments(ticket.id));
+});
+
+router.post("/tickets/:id/comments", async (req, res) => {
+  const agent = await getSignedInAgent(req);
+  if (!agent) {
+    res.status(403).json({ error: "Your SupportDesk account is not linked to an agent" });
+    return;
+  }
+  const { id } = GetMobileTicketParams.parse({ id: Number(req.params.id) });
+  const ticket = await getAssignedTicket(id, agent.id);
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  const body = CreateMobileTicketCommentBody.parse(req.body);
+  const [comment] = await db
+    .insert(commentsTable)
+    .values({
+      ticketId: ticket.id,
+      body: body.body,
+      isPublic: true,
+      authorId: agent.id,
+      attachments: body.attachments ?? [],
+    })
+    .returning();
+
+  if (!ticket.firstResponseAt) {
+    await db.update(ticketsTable).set({ firstResponseAt: new Date() }).where(eq(ticketsTable.id, ticket.id));
+  }
+  await db.insert(activityEventsTable).values({
+    type: "comment_added",
+    description: "Public comment added from mobile",
+    ticketId: ticket.id,
+    agentId: agent.id,
+  });
+  broadcast({
+    type: "comment:added",
+    ticketId: ticket.id,
+    subject: ticket.subject,
+    authorName: agent.name,
+    isPublic: true,
+  });
+
+  res.status(201).json((await serializeComments(ticket.id)).at(-1));
 });
 
 export default router;

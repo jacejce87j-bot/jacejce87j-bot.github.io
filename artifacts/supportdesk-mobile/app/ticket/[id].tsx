@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -14,7 +15,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   getGetMobileTicketQueryKey,
   getListMobileTicketsQueryKey,
+  getListMobileTicketCommentsQueryKey,
+  useCreateMobileTicketComment,
   useGetMobileTicket,
+  useListMobileTicketComments,
   useRequestUploadUrl,
   useUpdateMobileTicket,
   type TicketAttachment,
@@ -37,9 +41,14 @@ export default function TicketDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const ticketId = Number(params.id);
   const ticketQuery = useGetMobileTicket(ticketId);
+  const commentsQuery = useListMobileTicketComments(ticketId);
   const updateTicket = useUpdateMobileTicket();
+  const createComment = useCreateMobileTicketComment();
   const requestUpload = useRequestUploadUrl();
   const [uploading, setUploading] = useState(false);
+  const [replyUploading, setReplyUploading] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<TicketAttachment[]>([]);
 
   const ticket = ticketQuery.data;
 
@@ -67,6 +76,38 @@ export default function TicketDetailScreen() {
       Alert.alert('Upload failed', error instanceof Error ? error.message : 'Could not upload this file.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const addReplyAttachment = async () => {
+    try {
+      setReplyUploading(true);
+      const attachment = await pickAndUploadAttachment(requestUpload.mutateAsync);
+      if (attachment) setReplyAttachments((current) => [...current, attachment]);
+    } catch (error) {
+      Alert.alert('Upload failed', error instanceof Error ? error.message : 'Could not upload this file.');
+    } finally {
+      setReplyUploading(false);
+    }
+  };
+
+  const sendReply = async () => {
+    if (!replyText.trim() || createComment.isPending || replyUploading) return;
+    try {
+      await createComment.mutateAsync({
+        id: ticketId,
+        data: {
+          body: replyText.trim(),
+          isPublic: true,
+          attachments: replyAttachments.length ? replyAttachments : undefined,
+        },
+      });
+      setReplyText('');
+      setReplyAttachments([]);
+      await queryClient.invalidateQueries({ queryKey: getListMobileTicketCommentsQueryKey(ticketId) });
+      await queryClient.invalidateQueries({ queryKey: getGetMobileTicketQueryKey(ticketId) });
+    } catch (error) {
+      Alert.alert('Could not send reply', error instanceof Error ? error.message : 'Please try again.');
     }
   };
 
@@ -189,8 +230,67 @@ export default function TicketDetailScreen() {
           ))
         )}
         <View style={[styles.infoCard, { backgroundColor: colors.accent }]}>
-          <Feather name="lock" size={16} color={colors.primary} />
-          <Text style={[styles.infoText, { color: colors.foreground }]}>This mobile workspace only shows tickets assigned to you.</Text>
+          <Feather name="user-check" size={16} color={colors.primary} />
+          <Text style={[styles.infoText, { color: colors.foreground }]}>
+            Assigned to {ticket.assignee?.name ?? 'this support agent'}. Your mobile queue is limited to tickets assigned to you.
+          </Text>
+        </View>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Conversation</Text>
+        {commentsQuery.isLoading ? (
+          <ActivityIndicator color={colors.primary} style={styles.commentLoading} />
+        ) : commentsQuery.isError ? (
+          <Text style={[styles.mutedText, { color: colors.mutedForeground }]}>Could not load the conversation.</Text>
+        ) : commentsQuery.data?.length ? (
+          commentsQuery.data.map((comment) => (
+            <View key={comment.id} style={[styles.comment, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.commentHeader}>
+                <Text style={[styles.commentAuthor, { color: colors.foreground }]}>{comment.authorName ?? 'Support agent'}</Text>
+                <Text style={[styles.commentDate, { color: colors.mutedForeground }]}>
+                  {new Date(comment.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </Text>
+              </View>
+              <Text style={[styles.commentBody, { color: colors.foreground }]}>{comment.body}</Text>
+              {comment.attachments?.map((attachment) => (
+                <Text key={attachment.objectPath} style={[styles.commentAttachment, { color: colors.primary }]}>
+                  {attachment.name}
+                </Text>
+              ))}
+            </View>
+          ))
+        ) : (
+          <Text style={[styles.mutedText, { color: colors.mutedForeground }]}>No replies yet.</Text>
+        )}
+        <View style={[styles.replyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TextInput
+            value={replyText}
+            onChangeText={setReplyText}
+            placeholder="Write a public reply..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            textAlignVertical="top"
+            style={[styles.replyInput, { color: colors.foreground }]}
+          />
+          {replyAttachments.map((attachment) => (
+            <View key={attachment.objectPath} style={[styles.replyAttachment, { backgroundColor: colors.muted }]}>
+              <Text numberOfLines={1} style={[styles.replyAttachmentName, { color: colors.foreground }]}>{attachment.name}</Text>
+              <Pressable onPress={() => setReplyAttachments((items) => items.filter((item) => item.objectPath !== attachment.objectPath))}>
+                <Feather name="x" size={16} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+          ))}
+          <View style={styles.replyActions}>
+            <Pressable onPress={addReplyAttachment} disabled={replyUploading} style={styles.replyAttachButton}>
+              {replyUploading ? <ActivityIndicator color={colors.primary} size="small" /> : <Feather name="paperclip" size={16} color={colors.primary} />}
+              <Text style={[styles.replyAttachText, { color: colors.primary }]}>Attach</Text>
+            </Pressable>
+            <Pressable
+              onPress={sendReply}
+              disabled={!replyText.trim() || createComment.isPending || replyUploading}
+              style={[styles.sendButton, { backgroundColor: colors.primary }, (!replyText.trim() || createComment.isPending || replyUploading) && styles.disabled]}
+            >
+              {createComment.isPending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sendText}>Send reply</Text>}
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -233,6 +333,23 @@ const styles = StyleSheet.create({
   fileMeta: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 3 },
   infoCard: { alignItems: 'center', borderRadius: 10, flexDirection: 'row', gap: 9, marginTop: 28, padding: 13 },
   infoText: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 18 },
+  commentLoading: { marginTop: 12 },
+  comment: { borderRadius: 10, borderWidth: 1, marginTop: 10, padding: 12 },
+  commentHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  commentAuthor: { fontFamily: 'Inter_700Bold', fontSize: 12 },
+  commentDate: { fontFamily: 'Inter_400Regular', fontSize: 11 },
+  commentBody: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21, marginTop: 8 },
+  commentAttachment: { fontFamily: 'Inter_600SemiBold', fontSize: 12, marginTop: 8 },
+  replyCard: { borderRadius: 10, borderWidth: 1, marginTop: 12, padding: 12 },
+  replyInput: { fontFamily: 'Inter_400Regular', fontSize: 14, minHeight: 76 },
+  replyAttachment: { alignItems: 'center', borderRadius: 7, flexDirection: 'row', marginTop: 8, padding: 8 },
+  replyAttachmentName: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 12 },
+  replyActions: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  replyAttachButton: { alignItems: 'center', flexDirection: 'row', gap: 5, padding: 6 },
+  replyAttachText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  sendButton: { alignItems: 'center', borderRadius: 8, justifyContent: 'center', minHeight: 38, paddingHorizontal: 14 },
+  sendText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 12 },
+  disabled: { opacity: 0.5 },
   emptyTitle: { fontFamily: 'Inter_700Bold', fontSize: 18 },
   link: { fontFamily: 'Inter_700Bold', fontSize: 14 },
 });

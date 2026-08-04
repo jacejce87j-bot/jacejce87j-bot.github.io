@@ -306,7 +306,7 @@ paths:
     post:
       operationId: createMobileTicket
       tags: [mobile]
-      summary: Create a ticket assigned to the signed-in agent
+      summary: Create a ticket assigned to a selected agent
       requestBody:
         required: true
         content:
@@ -364,6 +364,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Ticket"
+
+  /mobile/tickets/{id}/comments:
+    get:
+      operationId: listMobileTicketComments
+      tags: [mobile]
+      summary: List comments for an assigned mobile ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Comments for the assigned ticket
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Comment"
+    post:
+      operationId: createMobileTicketComment
+      tags: [mobile]
+      summary: Add a public comment to an assigned mobile ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
 
   # ─── CONTACTS ─────────────────────────────────────────────────
   /contacts:
@@ -1075,6 +1119,9 @@ components:
         channel:
           type: string
           enum: [email, chat, phone, web, api]
+        assigneeId:
+          type: integer
+          description: Agent to assign the ticket to. Defaults to the signed-in agent.
         attachments:
           type: array
           items:

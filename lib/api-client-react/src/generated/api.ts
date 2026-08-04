@@ -915,7 +915,7 @@ export const getCreateMobileTicketUrl = () => {
 }
 
 /**
- * @summary Create a ticket assigned to the signed-in agent
+ * @summary Create a ticket assigned to a selected agent
  */
 export const createMobileTicket = async (mobileTicketInput: MobileTicketInput, options?: RequestInit): Promise<Ticket> => {
 
@@ -964,7 +964,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateMobileTicketMutationError = ErrorType<unknown>
 
     /**
- * @summary Create a ticket assigned to the signed-in agent
+ * @summary Create a ticket assigned to a selected agent
  */
 export const useCreateMobileTicket = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMobileTicket>>, TError,{data: BodyType<MobileTicketInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1124,6 +1124,155 @@ export const useUpdateMobileTicket = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateMobileTicketMutationOptions(options));
+    }
+
+export const getListMobileTicketCommentsUrl = (id: number,) => {
+
+
+
+
+  return `/api/mobile/tickets/${id}/comments`
+}
+
+/**
+ * @summary List comments for an assigned mobile ticket
+ */
+export const listMobileTicketComments = async (id: number, options?: RequestInit): Promise<Comment[]> => {
+
+  return customFetch<Comment[]>(getListMobileTicketCommentsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMobileTicketCommentsQueryKey = (id: number,) => {
+    return [
+    `/api/mobile/tickets/${id}/comments`
+    ] as const;
+    }
+
+
+export const getListMobileTicketCommentsQueryOptions = <TData = Awaited<ReturnType<typeof listMobileTicketComments>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMobileTicketComments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMobileTicketCommentsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMobileTicketComments>>> = ({ signal }) => listMobileTicketComments(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMobileTicketComments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMobileTicketCommentsQueryResult = NonNullable<Awaited<ReturnType<typeof listMobileTicketComments>>>
+export type ListMobileTicketCommentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List comments for an assigned mobile ticket
+ */
+
+export function useListMobileTicketComments<TData = Awaited<ReturnType<typeof listMobileTicketComments>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMobileTicketComments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMobileTicketCommentsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateMobileTicketCommentUrl = (id: number,) => {
+
+
+
+
+  return `/api/mobile/tickets/${id}/comments`
+}
+
+/**
+ * @summary Add a public comment to an assigned mobile ticket
+ */
+export const createMobileTicketComment = async (id: number,
+    commentInput: CommentInput, options?: RequestInit): Promise<Comment> => {
+
+  return customFetch<Comment>(getCreateMobileTicketCommentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      commentInput,)
+  }
+);}
+
+
+
+
+export const getCreateMobileTicketCommentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMobileTicketComment>>, TError,{id: number;data: BodyType<CommentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMobileTicketComment>>, TError,{id: number;data: BodyType<CommentInput>}, TContext> => {
+
+const mutationKey = ['createMobileTicketComment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMobileTicketComment>>, {id: number;data: BodyType<CommentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createMobileTicketComment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMobileTicketCommentMutationResult = NonNullable<Awaited<ReturnType<typeof createMobileTicketComment>>>
+    export type CreateMobileTicketCommentMutationBody = BodyType<CommentInput>
+    export type CreateMobileTicketCommentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a public comment to an assigned mobile ticket
+ */
+export const useCreateMobileTicketComment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMobileTicketComment>>, TError,{id: number;data: BodyType<CommentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMobileTicketComment>>,
+        TError,
+        {id: number;data: BodyType<CommentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateMobileTicketCommentMutationOptions(options));
     }
 
 export const getListContactsUrl = (params?: ListContactsParams,) => {

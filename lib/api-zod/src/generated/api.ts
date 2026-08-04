@@ -602,7 +602,7 @@ export const ListMobileTicketsResponse = zod.object({
 
 
 /**
- * @summary Create a ticket assigned to the signed-in agent
+ * @summary Create a ticket assigned to a selected agent
  */
 
 
@@ -613,6 +613,7 @@ export const CreateMobileTicketBody = zod.object({
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
   "type": zod.enum(['question', 'incident', 'problem', 'task']).optional(),
   "channel": zod.enum(['email', 'chat', 'phone', 'web', 'api']).optional(),
+  "assigneeId": zod.number().optional().describe('Agent to assign the ticket to. Defaults to the signed-in agent.'),
   "attachments": zod.array(zod.object({
   "name": zod.string(),
   "size": zod.number(),
@@ -803,6 +804,57 @@ export const UpdateMobileTicketResponse = zod.object({
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary List comments for an assigned mobile ticket
+ */
+export const ListMobileTicketCommentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListMobileTicketCommentsResponseItem = zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "body": zod.string(),
+  "isPublic": zod.boolean(),
+  "authorId": zod.number().nullish(),
+  "authorName": zod.string().nullish(),
+  "authorRole": zod.string().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})),
+  "createdAt": zod.string()
+})
+export const ListMobileTicketCommentsResponse = zod.array(ListMobileTicketCommentsResponseItem)
+
+
+/**
+ * @summary Add a public comment to an assigned mobile ticket
+ */
+export const CreateMobileTicketCommentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const CreateMobileTicketCommentBody = zod.object({
+  "body": zod.string().min(1),
+  "isPublic": zod.boolean().optional(),
+  "authorId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional()
 })
 
 

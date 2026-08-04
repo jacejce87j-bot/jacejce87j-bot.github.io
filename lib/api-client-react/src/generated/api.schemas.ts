@@ -275,6 +275,8 @@ export interface MobileTicketInput {
   priority?: MobileTicketInputPriority;
   type?: MobileTicketInputType;
   channel?: MobileTicketInputChannel;
+  /** Agent to assign the ticket to. Defaults to the signed-in agent. */
+  assigneeId?: number;
   attachments?: TicketAttachment[];
 }
 

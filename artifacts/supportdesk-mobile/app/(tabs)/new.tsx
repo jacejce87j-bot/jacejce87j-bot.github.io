@@ -30,14 +30,19 @@ export default function NewTicketScreen() {
   const [priority, setPriority] = useState<(typeof priorities)[number]>('normal');
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [createError, setCreateError] = useState('');
 
   const addAttachment = async () => {
     try {
+      setUploadError('');
       setUploading(true);
       const attachment = await pickAndUploadAttachment(requestUpload.mutateAsync);
       if (attachment) setAttachments((current) => [...current, attachment]);
     } catch (error) {
-      Alert.alert('Upload failed', error instanceof Error ? error.message : 'Could not upload this file.');
+      const message = error instanceof Error ? error.message : 'Could not upload this file.';
+      setUploadError(message);
+      Alert.alert('Upload failed', message);
     } finally {
       setUploading(false);
     }
@@ -46,6 +51,7 @@ export default function NewTicketScreen() {
   const submit = async () => {
     if (!subject.trim()) return;
     try {
+      setCreateError('');
       const ticket = await createTicket.mutateAsync({
         data: {
           subject: subject.trim(),
@@ -56,7 +62,9 @@ export default function NewTicketScreen() {
       });
       router.replace(`/ticket/${ticket.id}`);
     } catch (error) {
-      Alert.alert('Could not create ticket', error instanceof Error ? error.message : 'Please try again.');
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      setCreateError(message);
+      Alert.alert('Could not create ticket', message);
     }
   };
 
@@ -83,6 +91,7 @@ export default function NewTicketScreen() {
             {uploading ? <ActivityIndicator color={colors.primary} /> : <Feather name="paperclip" size={17} color={colors.primary} />}
             <Text style={[styles.attachText, { color: colors.foreground }]}>{uploading ? 'Uploading…' : 'Add attachment'}</Text>
           </Pressable>
+          {!!uploadError && <Text style={[styles.inlineError, { color: colors.destructive }]}>{uploadError}</Text>}
           {attachments.map((attachment) => (
             <View key={attachment.objectPath} style={[styles.attachment, { backgroundColor: colors.muted }]}>
               <Feather name="file" size={16} color={colors.primary} />
@@ -95,6 +104,7 @@ export default function NewTicketScreen() {
           <Pressable onPress={submit} disabled={!subject.trim() || createTicket.isPending || uploading} style={[styles.submit, { backgroundColor: colors.primary }, (!subject.trim() || createTicket.isPending || uploading) && styles.disabled]}>
             {createTicket.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Create ticket</Text>}
           </Pressable>
+          {!!createError && <Text style={[styles.inlineError, { color: colors.destructive }]}>{createError}</Text>}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -116,6 +126,7 @@ const styles = StyleSheet.create({
   priorityText: { fontFamily: 'Inter_600SemiBold', fontSize: 12, textTransform: 'capitalize' },
   attachButton: { alignItems: 'center', borderRadius: 10, borderWidth: 1, flexDirection: 'row', gap: 9, justifyContent: 'center', marginTop: 26, minHeight: 50 },
   attachText: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  inlineError: { fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 18, marginTop: 9 },
   attachment: { alignItems: 'center', borderRadius: 8, flexDirection: 'row', gap: 9, marginTop: 8, padding: 11 },
   attachmentName: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13 },
   submit: { alignItems: 'center', borderRadius: 10, justifyContent: 'center', marginTop: 26, minHeight: 54 },

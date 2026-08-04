@@ -1,22 +1,7 @@
-import type { AuthUser } from '@workspace/api-zod';
-import { type NextFunction, type Request, type Response } from 'express';
-import * as oidc from 'openid-client';
-
-import {
-  clearSession,
-  getOidcConfig,
-  getSession,
-  getSessionId,
-  updateSession,
-  type SessionData,
-} from '../lib/auth';
-
-function normalizeSessionUser(user: SessionData['user']): SessionData['user'] {
-  return {
-    ...user,
-    role: user.role ?? 'admin',
-  };
-}
+import { getAuth } from "@clerk/express";
+import type { AuthUser } from "@workspace/api-zod";
+import { db, usersTable } from "@workspace/db";
+import { type NextFunction, type Request, type Response } from "express";
 
 declare global {
   namespace Express {
@@ -24,70 +9,75 @@ declare global {
 
     interface Request {
       isAuthenticated(): this is AuthedRequest;
-
-      user?: User | undefined;
+      user?: User;
     }
 
-    export interface AuthedRequest {
+    interface AuthedRequest {
       user: User;
     }
   }
 }
 
-async function refreshIfExpired(
-  sid: string,
-  session: SessionData,
-): Promise<SessionData | null> {
-  const now = Math.floor(Date.now() / 1000);
-  if (!session.expires_at || now <= session.expires_at) return session;
-
-  if (!session.refresh_token) return null;
-
-  try {
-    const config = await getOidcConfig();
-    const tokens = await oidc.refreshTokenGrant(config, session.refresh_token);
-    session.access_token = tokens.access_token;
-    session.refresh_token = tokens.refresh_token ?? session.refresh_token;
-    session.expires_at = tokens.expiresIn()
-      ? now + tokens.expiresIn()!
-      : session.expires_at;
-    await updateSession(sid, session);
-    return session;
-  } catch {
-    return null;
+function stringClaim(
+  claims: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  for (const key of keys) {
+    if (typeof claims[key] === "string" && claims[key]) return claims[key] as string;
   }
+  return null;
 }
 
+/**
+ * Clerk owns the browser session. This middleware bridges an authenticated
+ * Clerk identity to the local SupportDesk user row that stores app roles.
+ */
 export async function authMiddleware(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ) {
   req.isAuthenticated = function (this: Request) {
     return this.user != null;
-  } as Request['isAuthenticated'];
+  } as Request["isAuthenticated"];
 
-  const sid = getSessionId(req);
-  if (!sid) {
+  const auth = getAuth(req);
+  if (!auth.userId) {
     next();
     return;
   }
 
-  const session = await getSession(sid);
-  if (!session?.user?.id) {
-    await clearSession(res, sid);
-    next();
-    return;
-  }
+  const claims = (auth.sessionClaims ?? {}) as Record<string, unknown>;
+  const identity = {
+    id: auth.userId,
+    email: stringClaim(claims, "email"),
+    firstName: stringClaim(claims, "firstName", "first_name"),
+    lastName: stringClaim(claims, "lastName", "last_name"),
+    profileImageUrl: stringClaim(claims, "imageUrl", "picture", "profile_image_url"),
+  };
 
-  const refreshed = await refreshIfExpired(sid, session);
-  if (!refreshed) {
-    await clearSession(res, sid);
-    next();
-    return;
-  }
+  const [dbUser] = await db
+    .insert(usersTable)
+    .values({ ...identity, role: "admin" })
+    .onConflictDoUpdate({
+      target: usersTable.id,
+      set: {
+        email: identity.email,
+        firstName: identity.firstName,
+        lastName: identity.lastName,
+        profileImageUrl: identity.profileImageUrl,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
 
-  refreshed.user = normalizeSessionUser(refreshed.user);
-  req.user = refreshed.user;
+  req.user = {
+    id: dbUser.id,
+    email: dbUser.email,
+    firstName: dbUser.firstName,
+    lastName: dbUser.lastName,
+    profileImageUrl: dbUser.profileImageUrl,
+    role: (dbUser.role ?? "admin") as AuthUser["role"],
+  };
   next();
 }

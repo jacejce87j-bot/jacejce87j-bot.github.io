@@ -10,7 +10,8 @@ import {
   LogOut,
 } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useClerk } from "@clerk/react";
+import { useSupportUser } from "@/hooks/use-support-user";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -18,7 +19,8 @@ interface LayoutProps {
 
 export function AppLayout({ children }: LayoutProps) {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useSupportUser();
+  const { signOut } = useClerk();
 
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -65,7 +67,7 @@ export function AppLayout({ children }: LayoutProps) {
           </div>
           <button
             type="button"
-            onClick={logout}
+            onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL })}
             className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
           >
             <LogOut className="h-4 w-4" />

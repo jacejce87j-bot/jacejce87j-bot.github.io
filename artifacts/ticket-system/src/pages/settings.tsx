@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useSupportUser } from "@/hooks/use-support-user";
 import { useCreateSlaPolicy, useListSlaPolicies, useUpdateSlaPolicy, getListSlaPoliciesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Clock3, LogIn, Plus, Save } from "lucide-react";
+import { Clock3, Plus, Save } from "lucide-react";
 
 export default function Settings() {
-  const { user, isLoading: isAuthLoading, login } = useAuth();
+  const { user, isLoading: isAuthLoading } = useSupportUser();
   const { data: policies, isLoading: isPoliciesLoading } = useListSlaPolicies();
   const [form, setForm] = useState({ name: "", priority: "normal", firstResponseMinutes: "60", resolutionMinutes: "1440" });
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -100,7 +100,7 @@ export default function Settings() {
                 <CardTitle className="flex items-center gap-2"><Clock3 className="h-5 w-5 text-primary" /> SLA policies</CardTitle>
                 <CardDescription>Set first-response and resolution targets by ticket priority.</CardDescription>
               </div>
-              {!isAuthLoading && !user && <Button variant="outline" onClick={login}><LogIn className="mr-2 h-4 w-4" /> Sign in to manage</Button>}
+              {!isAuthLoading && !user && <span className="text-sm text-muted-foreground">Access unavailable</span>}
             </div>
           </CardHeader>
           <CardContent className="space-y-5">

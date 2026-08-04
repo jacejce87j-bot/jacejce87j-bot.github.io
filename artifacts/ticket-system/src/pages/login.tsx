@@ -1,55 +1,15 @@
-import { useAuth } from "@workspace/replit-auth-web";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Headset, ShieldCheck, TriangleAlert } from "lucide-react";
+import { SignIn } from "@clerk/react";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Login() {
-  const { login, isLoading } = useAuth();
-  const authError = new URLSearchParams(window.location.search).get("authError");
-
   return (
-    <main className="min-h-screen bg-muted/30 px-6 py-12">
-      <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-md items-center justify-center">
-        <Card className="w-full overflow-hidden shadow-lg">
-          <div className="flex items-center gap-3 bg-sidebar px-6 py-5 text-sidebar-foreground">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Headset className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-lg font-semibold">SupportDesk</div>
-              <div className="text-xs text-sidebar-foreground/70">Ticket management workspace</div>
-            </div>
-          </div>
-          <CardHeader className="space-y-2 pb-4 pt-8 text-center">
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <CardDescription>
-              Sign in to manage tickets, customer records, SLA policies, and attachments.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5 pb-8">
-            {authError && (
-              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  We couldn’t complete sign-in. Please start again and finish the
-                  login in the new browser tab.
-                </span>
-              </div>
-            )}
-            <Button className="w-full" size="lg" onClick={login} disabled={isLoading}>
-              {isLoading ? "Checking session..." : "Log in"}
-            </Button>
-            <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span>
-                Sign-in opens in the full Preview window so the secure account
-                handoff can complete. If prompted, allow pop-ups from the
-                authentication provider.
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+      />
     </main>
   );
 }

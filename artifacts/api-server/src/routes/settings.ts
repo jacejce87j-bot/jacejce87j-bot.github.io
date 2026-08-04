@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 const router = Router();
 
 function isAdmin(req: any) {
-  return Boolean(req.isAuthenticated?.() && req.user?.role === "admin");
+  return Boolean(req.user?.role === "admin");
 }
 
 function serializePolicy(policy: typeof slaPoliciesTable.$inferSelect) {

@@ -2,3 +2,4 @@
 - [CSS import order](css-import-order.md) — Google Fonts @import url() must precede all other @import statements or PostCSS throws
 - [OpenAPI regeneration safety](openapi-regeneration-safety.md) — validate YAML before codegen because Orval cleans generated clients before failing on invalid specs
 - [Protected workspace flows](protected-workspace-flows.md) — protected uploads and admin settings need a visible auth gate, not only server-side 401 checks
+- [Clerk auth architecture](clerk-auth-architecture.md) — SupportDesk identity comes from Clerk; local users remain the source of application roles

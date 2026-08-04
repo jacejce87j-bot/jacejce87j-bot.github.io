@@ -24,8 +24,11 @@ export async function pickAndUploadAttachment(
   if (result.canceled || !result.assets[0]) return null;
 
   const asset = result.assets[0];
-  const nativeFile = new File(asset.uri);
-  const size = asset.size ?? nativeFile.size;
+  const nativeFile = Platform.OS === 'web' ? null : new File(asset.uri);
+  const size = asset.size ?? nativeFile?.size ?? asset.file?.size;
+  if (size == null) {
+    throw new Error('Could not determine the selected file size');
+  }
   const contentType = asset.mimeType || 'application/octet-stream';
   const upload = await requestUpload({
     data: {
@@ -38,8 +41,10 @@ export async function pickAndUploadAttachment(
   // DocumentPicker exposes a browser File on web. Keep that object for the
   // upload; Expo's filesystem File class is for native URIs and does not
   // reliably carry the selected browser file's bytes through fetch.
-  const body =
-    Platform.OS === 'web' && asset.file ? asset.file : nativeFile;
+  const body = Platform.OS === 'web' && asset.file ? asset.file : nativeFile;
+  if (!body) {
+    throw new Error('Could not read the selected file');
+  }
   const response = await fetch(upload.uploadURL, {
     method: 'PUT',
     headers: {

@@ -1,6 +1,7 @@
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import type { AuthUser } from "@workspace/api-zod";
-import { db, usersTable } from "@workspace/db";
+import { agentsTable, db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { type NextFunction, type Request, type Response } from "express";
 
 declare global {
@@ -28,6 +29,26 @@ function stringClaim(
   return null;
 }
 
+async function resolveEmail(
+  userId: string,
+  claims: Record<string, unknown>,
+): Promise<string | null> {
+  const claimEmail = stringClaim(
+    claims,
+    "email",
+    "emailAddress",
+    "email_address",
+  );
+  if (claimEmail) return claimEmail.trim().toLowerCase();
+
+  try {
+    const clerkUser = await clerkClient.users.getUser(userId);
+    return clerkUser.primaryEmailAddress?.emailAddress?.trim().toLowerCase() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Clerk owns the browser session. This middleware bridges an authenticated
  * Clerk identity to the local SupportDesk user row that stores app roles.
@@ -50,7 +71,7 @@ export async function authMiddleware(
   const claims = (auth.sessionClaims ?? {}) as Record<string, unknown>;
   const identity = {
     id: auth.userId,
-    email: stringClaim(claims, "email"),
+    email: await resolveEmail(auth.userId, claims),
     firstName: stringClaim(claims, "firstName", "first_name"),
     lastName: stringClaim(claims, "lastName", "last_name"),
     profileImageUrl: stringClaim(claims, "imageUrl", "picture", "profile_image_url"),
@@ -79,5 +100,13 @@ export async function authMiddleware(
     profileImageUrl: dbUser.profileImageUrl,
     role: (dbUser.role ?? "admin") as AuthUser["role"],
   };
+
+  if (identity.email) {
+    await db
+      .update(agentsTable)
+      .set({ isOnline: true })
+      .where(eq(agentsTable.email, identity.email));
+  }
+
   next();
 }

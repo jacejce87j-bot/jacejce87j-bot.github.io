@@ -27,6 +27,13 @@ async function getSignedInAgent(req: Express.Request) {
     .select()
     .from(agentsTable)
     .where(eq(agentsTable.email, email));
+  if (agent && !agent.isOnline) {
+    await db
+      .update(agentsTable)
+      .set({ isOnline: true })
+      .where(eq(agentsTable.id, agent.id));
+    agent.isOnline = true;
+  }
   return agent ?? null;
 }
 

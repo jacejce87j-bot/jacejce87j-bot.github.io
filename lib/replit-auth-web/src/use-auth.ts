@@ -16,19 +16,12 @@ function getBasePath() {
   return baseUrl.replace(/\/+$/, '') || '/';
 }
 
-function navigateTopLevel(url: string) {
-  // Replit Preview renders artifacts inside an iframe. The auth provider
-  // requires the development URL to be the top-level browser page, otherwise
-  // its account handoff can remain stuck on the preview testing interstitial.
-  if (window.top && window.top !== window) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_top';
-    link.rel = 'noopener';
-    link.click();
-    return;
-  }
-
+function navigateToAuth(url: string) {
+  // Replit Preview renders artifacts inside a sandboxed iframe, so the top
+  // frame cannot be scripted (window.top access throws, and synthetic
+  // '_top' anchor clicks are silently blocked). Navigate the preview frame
+  // itself: /api/login returns a 302 straight into the Replit OIDC
+  // provider, which completes the handoff in the same window.
   window.location.assign(url);
 }
 
@@ -68,7 +61,7 @@ export function useAuth(): AuthState {
       `/api/login?returnTo=${encodeURIComponent(base)}`,
       window.location.origin,
     ).href;
-    navigateTopLevel(loginUrl);
+    navigateToAuth(loginUrl);
   }, []);
 
   const logout = useCallback(() => {
@@ -77,7 +70,7 @@ export function useAuth(): AuthState {
       `/api/logout?returnTo=${encodeURIComponent(base)}`,
       window.location.origin,
     ).href;
-    navigateTopLevel(logoutUrl);
+    navigateToAuth(logoutUrl);
   }, []);
 
   return {

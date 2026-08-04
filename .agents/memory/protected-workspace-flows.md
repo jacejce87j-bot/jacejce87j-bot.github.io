@@ -9,8 +9,8 @@ Any endpoint protected by the session must have a corresponding user-facing logi
 
 **How to apply:** Add the auth boundary before protected workspace routes, use the shared browser auth hook, and verify both the unauthenticated screen and authenticated mutation path.
 
-In Replit Preview, start browser auth from the top-level development URL rather than leaving the OIDC provider inside the embedded artifact iframe. Promote navigation with a user-initiated anchor targeting `_top`; direct `window.top.location` assignment can throw “The operation is insecure.”
+In the Replit Preview iframe, start browser auth by navigating the preview frame itself with `window.location.assign()` to `/api/login`. Do NOT script the top frame: `window.top.location` throws "The operation is insecure", and a synthetic anchor with `target="_top"` is silently blocked (button appears to do nothing).
 
-**Why:** The provider’s development-testing interstitial can keep the account handoff from completing when the artifact remains nested in the preview frame.
+**Why:** The preview iframe is sandboxed and cross-origin; earlier attempts to promote the provider flow to the top-level window crashed or dead-clicked, while same-frame navigation successfully reaches the Replit OIDC provider, which completes the handoff in the same window.
 
-**How to apply:** When embedded, create an anchor with `target="_top"` and click it; retain same-window navigation when running as a top-level page.
+**How to apply:** In `lib/replit-auth-web/src/use-auth.ts`, login/logout use `window.location.assign(url)` unconditionally. The provider's development-testing interstitial is expected in Preview; the user must click its orange "Log in" button to complete the handoff.

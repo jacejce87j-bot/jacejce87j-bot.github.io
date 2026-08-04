@@ -85,7 +85,7 @@ function serializeOrg(o: OrgRow | null | undefined) {
   };
 }
 
-function serializeTicket(
+export function serializeTicket(
   t: typeof ticketsTable.$inferSelect,
   agent: AgentRow | null | undefined,
   contact: ContactRow | null | undefined,

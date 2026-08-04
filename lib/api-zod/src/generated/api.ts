@@ -508,6 +508,305 @@ export const CreateTicketCommentBody = zod.object({
 
 
 /**
+ * @summary List tickets assigned to the signed-in agent
+ */
+export const listMobileTicketsQueryPageDefault = 1;
+export const listMobileTicketsQueryLimitDefault = 50;
+
+export const ListMobileTicketsQueryParams = zod.object({
+  "status": zod.enum(['open', 'pending', 'on_hold', 'solved', 'closed']).optional(),
+  "page": zod.coerce.number().default(listMobileTicketsQueryPageDefault),
+  "limit": zod.coerce.number().default(listMobileTicketsQueryLimitDefault)
+})
+
+export const ListMobileTicketsResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "subject": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['open', 'pending', 'on_hold', 'solved', 'closed']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "type": zod.enum(['question', 'incident', 'problem', 'task']),
+  "channel": zod.enum(['email', 'chat', 'phone', 'web', 'api']),
+  "assigneeId": zod.number().nullish(),
+  "assignee": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['agent', 'admin', 'supervisor']),
+  "avatarUrl": zod.string().nullish(),
+  "isOnline": zod.boolean().optional(),
+  "openTicketCount": zod.number().optional(),
+  "createdAt": zod.string()
+}).optional(),
+  "requesterId": zod.number().nullish(),
+  "requester": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "role": zod.enum(['end_user', 'agent', 'admin']).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "notes": zod.string().nullish(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "dueAt": zod.string().nullish(),
+  "firstResponseAt": zod.string().nullish(),
+  "resolvedAt": zod.string().nullish(),
+  "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
+  "commentCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+/**
+ * @summary Create a ticket assigned to the signed-in agent
+ */
+
+
+
+export const CreateMobileTicketBody = zod.object({
+  "subject": zod.string().min(1),
+  "description": zod.string().optional(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  "type": zod.enum(['question', 'incident', 'problem', 'task']).optional(),
+  "channel": zod.enum(['email', 'chat', 'phone', 'web', 'api']).optional(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional()
+})
+
+
+/**
+ * @summary Get an assigned ticket
+ */
+export const GetMobileTicketParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetMobileTicketResponse = zod.object({
+  "id": zod.number(),
+  "subject": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['open', 'pending', 'on_hold', 'solved', 'closed']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "type": zod.enum(['question', 'incident', 'problem', 'task']),
+  "channel": zod.enum(['email', 'chat', 'phone', 'web', 'api']),
+  "assigneeId": zod.number().nullish(),
+  "assignee": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['agent', 'admin', 'supervisor']),
+  "avatarUrl": zod.string().nullish(),
+  "isOnline": zod.boolean().optional(),
+  "openTicketCount": zod.number().optional(),
+  "createdAt": zod.string()
+}).optional(),
+  "requesterId": zod.number().nullish(),
+  "requester": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "role": zod.enum(['end_user', 'agent', 'admin']).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "notes": zod.string().nullish(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "dueAt": zod.string().nullish(),
+  "firstResponseAt": zod.string().nullish(),
+  "resolvedAt": zod.string().nullish(),
+  "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
+  "commentCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update an assigned ticket
+ */
+export const UpdateMobileTicketParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateMobileTicketBody = zod.object({
+  "description": zod.string().optional(),
+  "status": zod.enum(['open', 'pending', 'on_hold', 'solved', 'closed']).optional(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  "type": zod.enum(['question', 'incident', 'problem', 'task']).optional(),
+  "channel": zod.enum(['email', 'chat', 'phone', 'web', 'api']).optional(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional()
+})
+
+export const UpdateMobileTicketResponse = zod.object({
+  "id": zod.number(),
+  "subject": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['open', 'pending', 'on_hold', 'solved', 'closed']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "type": zod.enum(['question', 'incident', 'problem', 'task']),
+  "channel": zod.enum(['email', 'chat', 'phone', 'web', 'api']),
+  "assigneeId": zod.number().nullish(),
+  "assignee": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['agent', 'admin', 'supervisor']),
+  "avatarUrl": zod.string().nullish(),
+  "isOnline": zod.boolean().optional(),
+  "openTicketCount": zod.number().optional(),
+  "createdAt": zod.string()
+}).optional(),
+  "requesterId": zod.number().nullish(),
+  "requester": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string().nullish(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "role": zod.enum(['end_user', 'agent', 'admin']).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "notes": zod.string().nullish(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "organizationId": zod.number().nullish(),
+  "organization": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "plan": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "contactCount": zod.number().optional(),
+  "ticketCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "dueAt": zod.string().nullish(),
+  "firstResponseAt": zod.string().nullish(),
+  "resolvedAt": zod.string().nullish(),
+  "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
+  "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
+  "commentCount": zod.number().optional(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
  * @summary List contacts
  */
 export const listContactsQueryPageDefault = 1;

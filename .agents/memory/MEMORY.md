@@ -4,3 +4,4 @@
 - [Protected workspace flows](protected-workspace-flows.md) — protected uploads and admin settings need a visible auth gate, not only server-side 401 checks
 - [Clerk auth architecture](clerk-auth-architecture.md) — SupportDesk identity comes from Clerk; local users remain the source of application roles
 - [Clerk development providers](clerk-development-providers.md) — Gmail sign-in works in the managed Clerk development environment
+- [SupportDesk mobile agent app](mobile-agent-app.md) — Expo uses Clerk bearer tokens and server-enforced assignment-scoped ticket access

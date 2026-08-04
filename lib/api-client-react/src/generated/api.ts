@@ -38,9 +38,12 @@ import type {
   GetDashboardActivityParams,
   HealthStatus,
   ListContactsParams,
+  ListMobileTicketsParams,
   ListOrganizationsParams,
   ListTicketsParams,
   LogoutBrowserSessionParams,
+  MobileTicketInput,
+  MobileTicketUpdate,
   Organization,
   OrganizationInput,
   OrganizationPage,
@@ -817,6 +820,310 @@ export const useCreateTicketComment = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateTicketCommentMutationOptions(options));
+    }
+
+export const getListMobileTicketsUrl = (params?: ListMobileTicketsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/mobile/tickets?${stringifiedParams}` : `/api/mobile/tickets`
+}
+
+/**
+ * @summary List tickets assigned to the signed-in agent
+ */
+export const listMobileTickets = async (params?: ListMobileTicketsParams, options?: RequestInit): Promise<TicketPage> => {
+
+  return customFetch<TicketPage>(getListMobileTicketsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMobileTicketsQueryKey = (params?: ListMobileTicketsParams,) => {
+    return [
+    `/api/mobile/tickets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMobileTicketsQueryOptions = <TData = Awaited<ReturnType<typeof listMobileTickets>>, TError = ErrorType<unknown>>(params?: ListMobileTicketsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMobileTickets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMobileTicketsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMobileTickets>>> = ({ signal }) => listMobileTickets(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMobileTickets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMobileTicketsQueryResult = NonNullable<Awaited<ReturnType<typeof listMobileTickets>>>
+export type ListMobileTicketsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List tickets assigned to the signed-in agent
+ */
+
+export function useListMobileTickets<TData = Awaited<ReturnType<typeof listMobileTickets>>, TError = ErrorType<unknown>>(
+ params?: ListMobileTicketsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMobileTickets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMobileTicketsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateMobileTicketUrl = () => {
+
+
+
+
+  return `/api/mobile/tickets`
+}
+
+/**
+ * @summary Create a ticket assigned to the signed-in agent
+ */
+export const createMobileTicket = async (mobileTicketInput: MobileTicketInput, options?: RequestInit): Promise<Ticket> => {
+
+  return customFetch<Ticket>(getCreateMobileTicketUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mobileTicketInput,)
+  }
+);}
+
+
+
+
+export const getCreateMobileTicketMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMobileTicket>>, TError,{data: BodyType<MobileTicketInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMobileTicket>>, TError,{data: BodyType<MobileTicketInput>}, TContext> => {
+
+const mutationKey = ['createMobileTicket'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMobileTicket>>, {data: BodyType<MobileTicketInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createMobileTicket(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMobileTicketMutationResult = NonNullable<Awaited<ReturnType<typeof createMobileTicket>>>
+    export type CreateMobileTicketMutationBody = BodyType<MobileTicketInput>
+    export type CreateMobileTicketMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a ticket assigned to the signed-in agent
+ */
+export const useCreateMobileTicket = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMobileTicket>>, TError,{data: BodyType<MobileTicketInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMobileTicket>>,
+        TError,
+        {data: BodyType<MobileTicketInput>},
+        TContext
+      > => {
+      return useMutation(getCreateMobileTicketMutationOptions(options));
+    }
+
+export const getGetMobileTicketUrl = (id: number,) => {
+
+
+
+
+  return `/api/mobile/tickets/${id}`
+}
+
+/**
+ * @summary Get an assigned ticket
+ */
+export const getMobileTicket = async (id: number, options?: RequestInit): Promise<Ticket> => {
+
+  return customFetch<Ticket>(getGetMobileTicketUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMobileTicketQueryKey = (id: number,) => {
+    return [
+    `/api/mobile/tickets/${id}`
+    ] as const;
+    }
+
+
+export const getGetMobileTicketQueryOptions = <TData = Awaited<ReturnType<typeof getMobileTicket>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMobileTicket>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMobileTicketQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMobileTicket>>> = ({ signal }) => getMobileTicket(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMobileTicket>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMobileTicketQueryResult = NonNullable<Awaited<ReturnType<typeof getMobileTicket>>>
+export type GetMobileTicketQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get an assigned ticket
+ */
+
+export function useGetMobileTicket<TData = Awaited<ReturnType<typeof getMobileTicket>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMobileTicket>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMobileTicketQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateMobileTicketUrl = (id: number,) => {
+
+
+
+
+  return `/api/mobile/tickets/${id}`
+}
+
+/**
+ * @summary Update an assigned ticket
+ */
+export const updateMobileTicket = async (id: number,
+    mobileTicketUpdate: MobileTicketUpdate, options?: RequestInit): Promise<Ticket> => {
+
+  return customFetch<Ticket>(getUpdateMobileTicketUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mobileTicketUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateMobileTicketMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMobileTicket>>, TError,{id: number;data: BodyType<MobileTicketUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMobileTicket>>, TError,{id: number;data: BodyType<MobileTicketUpdate>}, TContext> => {
+
+const mutationKey = ['updateMobileTicket'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMobileTicket>>, {id: number;data: BodyType<MobileTicketUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateMobileTicket(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMobileTicketMutationResult = NonNullable<Awaited<ReturnType<typeof updateMobileTicket>>>
+    export type UpdateMobileTicketMutationBody = BodyType<MobileTicketUpdate>
+    export type UpdateMobileTicketMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update an assigned ticket
+ */
+export const useUpdateMobileTicket = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMobileTicket>>, TError,{id: number;data: BodyType<MobileTicketUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMobileTicket>>,
+        TError,
+        {id: number;data: BodyType<MobileTicketUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateMobileTicketMutationOptions(options));
     }
 
 export const getListContactsUrl = (params?: ListContactsParams,) => {

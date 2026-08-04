@@ -29,6 +29,8 @@ tags:
     description: Administrative settings
   - name: storage
     description: Secure file storage
+  - name: mobile
+    description: Mobile agent ticket operations
 
 paths:
   /healthz:
@@ -272,6 +274,96 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Comment"
+
+  /mobile/tickets:
+    get:
+      operationId: listMobileTickets
+      tags: [mobile]
+      summary: List tickets assigned to the signed-in agent
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, pending, on_hold, solved, closed]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Assigned tickets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketPage"
+    post:
+      operationId: createMobileTicket
+      tags: [mobile]
+      summary: Create a ticket assigned to the signed-in agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileTicketInput"
+      responses:
+        "201":
+          description: Created ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+
+  /mobile/tickets/{id}:
+    get:
+      operationId: getMobileTicket
+      tags: [mobile]
+      summary: Get an assigned ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assigned ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateMobileTicket
+      tags: [mobile]
+      summary: Update an assigned ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileTicketUpdate"
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
 
   # ─── CONTACTS ─────────────────────────────────────────────────
   /contacts:
@@ -960,6 +1052,51 @@ components:
             type: string
         dueAt:
           type: ["string", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAttachment"
+
+    MobileTicketInput:
+      type: object
+      required: [subject]
+      properties:
+        subject:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        type:
+          type: string
+          enum: [question, incident, problem, task]
+        channel:
+          type: string
+          enum: [email, chat, phone, web, api]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAttachment"
+
+    MobileTicketUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, pending, on_hold, solved, closed]
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        type:
+          type: string
+          enum: [question, incident, problem, task]
+        channel:
+          type: string
+          enum: [email, chat, phone, web, api]
         attachments:
           type: array
           items:

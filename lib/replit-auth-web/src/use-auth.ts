@@ -21,7 +21,11 @@ function navigateTopLevel(url: string) {
   // requires the development URL to be the top-level browser page, otherwise
   // its account handoff can remain stuck on the preview testing interstitial.
   if (window.top && window.top !== window) {
-    window.top.location.href = url;
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_top';
+    link.rel = 'noopener';
+    link.click();
     return;
   }
 

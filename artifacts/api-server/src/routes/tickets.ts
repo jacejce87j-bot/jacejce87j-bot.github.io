@@ -411,6 +411,7 @@ router.get("/:id/comments", async (req, res) => {
       authorId: c.authorId,
       authorName: author?.name ?? null,
       authorRole: author?.role ?? null,
+      attachments: c.attachments ?? [],
       createdAt: c.createdAt.toISOString(),
     };
   });
@@ -459,6 +460,7 @@ router.post("/:id/comments", async (req, res) => {
     authorId: comment.authorId,
     authorName: author?.name ?? null,
     authorRole: author?.role ?? null,
+    attachments: comment.attachments ?? [],
     createdAt: comment.createdAt.toISOString(),
   });
 });

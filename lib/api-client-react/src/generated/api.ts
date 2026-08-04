@@ -56,6 +56,9 @@ import type {
   TicketInput,
   TicketMergeInput,
   TicketPage,
+  TicketTemplate,
+  TicketTemplateInput,
+  TicketTemplateUpdate,
   TicketUpdate
 } from './api.schemas';
 
@@ -2625,6 +2628,296 @@ export const useUpdateSlaPolicy = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateSlaPolicyMutationOptions(options));
+    }
+
+export const getListTicketTemplatesUrl = () => {
+
+
+
+
+  return `/api/settings/ticket-templates`
+}
+
+/**
+ * @summary List ticket templates
+ */
+export const listTicketTemplates = async ( options?: RequestInit): Promise<TicketTemplate[]> => {
+
+  return customFetch<TicketTemplate[]>(getListTicketTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTicketTemplatesQueryKey = () => {
+    return [
+    `/api/settings/ticket-templates`
+    ] as const;
+    }
+
+
+export const getListTicketTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listTicketTemplates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTicketTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTicketTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTicketTemplates>>> = ({ signal }) => listTicketTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTicketTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTicketTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listTicketTemplates>>>
+export type ListTicketTemplatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List ticket templates
+ */
+
+export function useListTicketTemplates<TData = Awaited<ReturnType<typeof listTicketTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTicketTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTicketTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateTicketTemplateUrl = () => {
+
+
+
+
+  return `/api/settings/ticket-templates`
+}
+
+/**
+ * @summary Create a ticket template
+ */
+export const createTicketTemplate = async (ticketTemplateInput: TicketTemplateInput, options?: RequestInit): Promise<TicketTemplate> => {
+
+  return customFetch<TicketTemplate>(getCreateTicketTemplateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ticketTemplateInput,)
+  }
+);}
+
+
+
+
+export const getCreateTicketTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTicketTemplate>>, TError,{data: BodyType<TicketTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTicketTemplate>>, TError,{data: BodyType<TicketTemplateInput>}, TContext> => {
+
+const mutationKey = ['createTicketTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTicketTemplate>>, {data: BodyType<TicketTemplateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTicketTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTicketTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof createTicketTemplate>>>
+    export type CreateTicketTemplateMutationBody = BodyType<TicketTemplateInput>
+    export type CreateTicketTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a ticket template
+ */
+export const useCreateTicketTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTicketTemplate>>, TError,{data: BodyType<TicketTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTicketTemplate>>,
+        TError,
+        {data: BodyType<TicketTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTicketTemplateMutationOptions(options));
+    }
+
+export const getUpdateTicketTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/settings/ticket-templates/${id}`
+}
+
+/**
+ * @summary Update a ticket template
+ */
+export const updateTicketTemplate = async (id: number,
+    ticketTemplateUpdate: TicketTemplateUpdate, options?: RequestInit): Promise<TicketTemplate> => {
+
+  return customFetch<TicketTemplate>(getUpdateTicketTemplateUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ticketTemplateUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateTicketTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTicketTemplate>>, TError,{id: number;data: BodyType<TicketTemplateUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTicketTemplate>>, TError,{id: number;data: BodyType<TicketTemplateUpdate>}, TContext> => {
+
+const mutationKey = ['updateTicketTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTicketTemplate>>, {id: number;data: BodyType<TicketTemplateUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateTicketTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTicketTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof updateTicketTemplate>>>
+    export type UpdateTicketTemplateMutationBody = BodyType<TicketTemplateUpdate>
+    export type UpdateTicketTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a ticket template
+ */
+export const useUpdateTicketTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTicketTemplate>>, TError,{id: number;data: BodyType<TicketTemplateUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTicketTemplate>>,
+        TError,
+        {id: number;data: BodyType<TicketTemplateUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateTicketTemplateMutationOptions(options));
+    }
+
+export const getDeleteTicketTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/settings/ticket-templates/${id}`
+}
+
+/**
+ * @summary Delete a ticket template
+ */
+export const deleteTicketTemplate = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteTicketTemplateUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTicketTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTicketTemplate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTicketTemplate>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteTicketTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTicketTemplate>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTicketTemplate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTicketTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTicketTemplate>>>
+
+    export type DeleteTicketTemplateMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a ticket template
+ */
+export const useDeleteTicketTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTicketTemplate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTicketTemplate>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteTicketTemplateMutationOptions(options));
     }
 
 export const getGetCurrentAuthUserUrl = () => {

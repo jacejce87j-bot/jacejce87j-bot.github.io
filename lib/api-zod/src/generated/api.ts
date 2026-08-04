@@ -471,6 +471,13 @@ export const ListTicketCommentsResponseItem = zod.object({
   "authorId": zod.number().nullish(),
   "authorName": zod.string().nullish(),
   "authorRole": zod.string().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})),
   "createdAt": zod.string()
 })
 export const ListTicketCommentsResponse = zod.array(ListTicketCommentsResponseItem)
@@ -489,7 +496,14 @@ export const CreateTicketCommentParams = zod.object({
 export const CreateTicketCommentBody = zod.object({
   "body": zod.string().min(1),
   "isPublic": zod.boolean().optional(),
-  "authorId": zod.number().nullish()
+  "authorId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional()
 })
 
 
@@ -1044,6 +1058,69 @@ export const UpdateSlaPolicyResponse = zod.object({
   "isActive": zod.boolean(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary List ticket templates
+ */
+export const ListTicketTemplatesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListTicketTemplatesResponse = zod.array(ListTicketTemplatesResponseItem)
+
+
+/**
+ * @summary Create a ticket template
+ */
+
+
+
+
+export const CreateTicketTemplateBody = zod.object({
+  "name": zod.string().min(1),
+  "description": zod.string().min(1),
+  "isActive": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update a ticket template
+ */
+export const UpdateTicketTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+export const UpdateTicketTemplateBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "description": zod.string().min(1).optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateTicketTemplateResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a ticket template
+ */
+export const DeleteTicketTemplateParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 

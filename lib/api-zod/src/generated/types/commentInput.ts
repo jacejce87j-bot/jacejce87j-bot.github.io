@@ -5,6 +5,7 @@
  * Ticket Management System API
  * OpenAPI spec version: 0.1.0
  */
+import type { TicketAttachment } from './ticketAttachment';
 
 export interface CommentInput {
   /** @minLength 1 */
@@ -12,4 +13,5 @@ export interface CommentInput {
   isPublic?: boolean;
   /** @nullable */
   authorId?: number | null;
+  attachments?: TicketAttachment[];
 }

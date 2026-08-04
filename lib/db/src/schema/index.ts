@@ -7,3 +7,4 @@ export * from "./tags";
 export * from "./activity_events";
 export * from "./sla_policies";
 export * from "./auth";
+export * from "./ticket_templates";

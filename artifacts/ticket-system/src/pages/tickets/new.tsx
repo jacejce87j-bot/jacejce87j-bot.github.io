@@ -5,6 +5,7 @@ import {
   useListContacts, 
   useListOrganizations,
   useListAgents,
+  useListTicketTemplates,
   getListTicketsQueryKey
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +30,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -55,6 +56,7 @@ export default function NewTicket() {
   const { data: contacts } = useListContacts({ limit: 100 });
   const { data: organizations } = useListOrganizations({ limit: 100 });
   const { data: agents } = useListAgents();
+  const { data: templates } = useListTicketTemplates();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -129,6 +131,33 @@ export default function NewTicket() {
                     </FormItem>
                   )}
                 />
+
+                {templates?.some((template) => template.isActive) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FormLabel className="mb-0">Description template</FormLabel>
+                      <span className="text-xs text-muted-foreground">(optional)</span>
+                    </div>
+                    <Select
+                      onValueChange={(value) => {
+                        const template = templates.find((candidate) => candidate.id.toString() === value);
+                        if (template) form.setValue("description", template.description, { shouldDirty: true });
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a template to prefill the description" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templates.filter((template) => template.isActive).map((template) => (
+                          <SelectItem key={template.id} value={template.id.toString()}>
+                            <span className="flex items-center gap-2"><FileText className="h-4 w-4" />{template.name}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Selecting a template only fills the Description field; you can edit it before creating the ticket.</p>
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}

@@ -1,8 +1,9 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { ticketsTable } from "./tickets";
 import { agentsTable } from "./agents";
+import type { TicketAttachment } from "./tickets";
 
 export const commentsTable = pgTable("comments", {
   id: serial("id").primaryKey(),
@@ -10,6 +11,7 @@ export const commentsTable = pgTable("comments", {
   body: text("body").notNull(),
   isPublic: boolean("is_public").notNull().default(true),
   authorId: integer("author_id").references(() => agentsTable.id, { onDelete: "set null" }),
+  attachments: jsonb("attachments").$type<TicketAttachment[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -730,6 +730,76 @@ paths:
               schema:
                 $ref: "#/components/schemas/SlaPolicy"
 
+  /settings/ticket-templates:
+    get:
+      operationId: listTicketTemplates
+      tags: [settings]
+      summary: List ticket templates
+      responses:
+        "200":
+          description: Ticket templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TicketTemplate"
+    post:
+      operationId: createTicketTemplate
+      tags: [settings]
+      summary: Create a ticket template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketTemplateInput"
+      responses:
+        "201":
+          description: Created ticket template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketTemplate"
+
+  /settings/ticket-templates/{id}:
+    patch:
+      operationId: updateTicketTemplate
+      tags: [settings]
+      summary: Update a ticket template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketTemplateUpdate"
+      responses:
+        "200":
+          description: Updated ticket template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketTemplate"
+    delete:
+      operationId: deleteTicketTemplate
+      tags: [settings]
+      summary: Delete a ticket template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /auth/user:
     get:
       tags: [Auth]
@@ -948,6 +1018,48 @@ components:
           type: string
         uploadedAt:
           type: string
+
+    TicketTemplate:
+      type: object
+      required: [id, name, description, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    TicketTemplateInput:
+      type: object
+      required: [name, description]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          minLength: 1
+        isActive:
+          type: boolean
+
+    TicketTemplateUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          minLength: 1
+        isActive:
+          type: boolean
 
     TicketPage:
       type: object
@@ -1285,7 +1397,7 @@ components:
     # ─── COMMENT ──────────────────────────────────────────────
     Comment:
       type: object
-      required: [id, ticketId, body, isPublic, createdAt]
+      required: [id, ticketId, body, isPublic, attachments, createdAt]
       properties:
         id:
           type: integer
@@ -1301,6 +1413,10 @@ components:
           type: ["string", "null"]
         authorRole:
           type: ["string", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAttachment"
         createdAt:
           type: string
 
@@ -1315,6 +1431,10 @@ components:
           type: boolean
         authorId:
           type: ["integer", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAttachment"
 
     # ─── TAG ──────────────────────────────────────────────────
     Tag:

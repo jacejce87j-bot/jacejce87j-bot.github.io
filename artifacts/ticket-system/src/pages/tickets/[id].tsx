@@ -59,6 +59,7 @@ export default function TicketDetail() {
     mutation: {
       onSuccess: () => {
         setNewComment("");
+        setCommentAttachments([]);
         queryClient.invalidateQueries({ queryKey: getListTicketCommentsQueryKey(ticketId) });
         toast({ title: "Comment added" });
       }
@@ -67,6 +68,7 @@ export default function TicketDetail() {
 
   const [newComment, setNewComment] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  const [commentAttachments, setCommentAttachments] = useState<TicketAttachment[]>([]);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [isSavingAttachment, setIsSavingAttachment] = useState(false);
 
@@ -88,9 +90,27 @@ export default function TicketDetail() {
       id: ticketId,
       data: {
         body: newComment,
-        isPublic: !isInternal
+        isPublic: !isInternal,
+        attachments: commentAttachments,
       }
     });
+  };
+
+  const handleCommentAttachment = async (file: File) => {
+    setIsSavingAttachment(true);
+    const uploaded = await uploadFile(file);
+    setIsSavingAttachment(false);
+    if (!uploaded) return;
+    setCommentAttachments((current) => [
+      ...current,
+      {
+        name: uploaded.metadata.name,
+        size: uploaded.metadata.size,
+        contentType: uploaded.metadata.contentType,
+        objectPath: uploaded.objectPath,
+        uploadedAt: new Date().toISOString(),
+      },
+    ]);
   };
 
   const handleAttachment = async (file: File) => {
@@ -311,6 +331,28 @@ export default function TicketDetail() {
                         </CardHeader>
                         <CardContent className="p-4 text-sm whitespace-pre-wrap">
                           {comment.body}
+                          {comment.attachments?.length > 0 && (
+                            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                              {comment.attachments.map((attachment) => (
+                                <a
+                                  key={`${attachment.objectPath}-${attachment.uploadedAt}`}
+                                  href={attachmentUrl(attachment.objectPath)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-2 rounded-md border bg-background p-2 text-sm transition-colors hover:bg-muted/50"
+                                >
+                                  <FileText className="h-5 w-5 shrink-0 text-primary" />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate font-medium">{attachment.name}</span>
+                                    <span className="block truncate text-xs text-muted-foreground">
+                                      {formatFileSize(attachment.size)} · {attachment.contentType}
+                                    </span>
+                                  </span>
+                                  <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     </div>
@@ -342,17 +384,54 @@ export default function TicketDetail() {
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                     />
+                    {commentAttachments.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {commentAttachments.map((attachment, index) => (
+                          <div key={`${attachment.objectPath}-${attachment.uploadedAt}`} className="flex items-center gap-2 rounded-md border bg-background p-2 text-sm">
+                            <FileText className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="min-w-0 flex-1 truncate">{attachment.name}</span>
+                            <span className="text-xs text-muted-foreground">{formatFileSize(attachment.size)}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-muted-foreground"
+                              onClick={() => setCommentAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex justify-between items-center mt-4">
                       <div className="text-xs text-muted-foreground">
                         {isInternal ? "This note will not be visible to the customer." : "The customer will receive an email notification."}
                       </div>
-                      <Button 
-                        onClick={handleAddComment} 
-                        disabled={createComment.isPending || !newComment.trim()}
-                        className={isInternal ? "bg-yellow-600 hover:bg-yellow-700 text-white" : ""}
-                      >
-                        {createComment.isPending ? "Sending..." : "Submit"} <Send className="ml-2 h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer">
+                          <Button asChild type="button" variant="outline" size="sm" disabled={isUploading || isSavingAttachment || createComment.isPending}>
+                            <span><Paperclip className="mr-2 h-3.5 w-3.5" /> {isUploading || isSavingAttachment ? "Uploading..." : "Attach file"}</span>
+                          </Button>
+                          <input
+                            type="file"
+                            className="sr-only"
+                            disabled={isUploading || isSavingAttachment || createComment.isPending}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              event.currentTarget.value = "";
+                              if (file) void handleCommentAttachment(file);
+                            }}
+                          />
+                        </label>
+                        <Button
+                          onClick={handleAddComment}
+                          disabled={createComment.isPending || !newComment.trim() || isUploading || isSavingAttachment}
+                          className={isInternal ? "bg-yellow-600 hover:bg-yellow-700 text-white" : ""}
+                        >
+                          {createComment.isPending ? "Sending..." : "Submit"} <Send className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </Card>

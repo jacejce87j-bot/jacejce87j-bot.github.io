@@ -5,6 +5,7 @@
  * Ticket Management System API
  * OpenAPI spec version: 0.1.0
  */
+import type { TicketAttachment } from './ticketAttachment';
 
 export interface Comment {
   id: number;
@@ -17,5 +18,6 @@ export interface Comment {
   authorName?: string | null;
   /** @nullable */
   authorRole?: string | null;
+  attachments: TicketAttachment[];
   createdAt: string;
 }

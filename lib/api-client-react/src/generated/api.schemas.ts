@@ -301,6 +301,31 @@ export interface TicketUpdate {
   attachments?: TicketAttachment[];
 }
 
+export interface TicketTemplate {
+  id: number;
+  name: string;
+  description: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketTemplateInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  description: string;
+  isActive?: boolean;
+}
+
+export interface TicketTemplateUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @minLength 1 */
+  description?: string;
+  isActive?: boolean;
+}
+
 export interface TicketPage {
   data: Ticket[];
   total: number;
@@ -528,6 +553,7 @@ export interface Comment {
   authorName?: string | null;
   /** @nullable */
   authorRole?: string | null;
+  attachments: TicketAttachment[];
   createdAt: string;
 }
 
@@ -537,6 +563,7 @@ export interface CommentInput {
   isPublic?: boolean;
   /** @nullable */
   authorId?: number | null;
+  attachments?: TicketAttachment[];
 }
 
 export interface Tag {

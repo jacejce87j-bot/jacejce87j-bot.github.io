@@ -19,7 +19,7 @@ router.get("/stats", async (req, res) => {
       db.select({ cnt: count() }).from(ticketsTable).where(and(eq(ticketsTable.priority, "urgent"), eq(ticketsTable.status, "open"))).then((r) => r[0]),
       db.select({ cnt: count() }).from(ticketsTable).where(and(sql`${ticketsTable.assigneeId} IS NULL`, sql`${ticketsTable.status} NOT IN ('solved','closed')`)).then((r) => r[0]),
       db.select({ cnt: count() }).from(ticketsTable).where(and(sql`${ticketsTable.status} IN ('solved','closed')`, sql`DATE(${ticketsTable.resolvedAt}) = CURRENT_DATE`)).then((r) => r[0]),
-      db.select({ cnt: count() }).from(ticketsTable).where(and(sql`${ticketsTable.due_at} < NOW()`, sql`${ticketsTable.status} NOT IN ('solved','closed')`)).then((r) => r[0]).catch(() => ({ cnt: 0 })),
+      db.select({ cnt: count() }).from(ticketsTable).where(and(sql`${ticketsTable.dueAt} < NOW()`, sql`${ticketsTable.status} NOT IN ('solved','closed')`)).then((r) => r[0]).catch(() => ({ cnt: 0 })),
       db.select({ cnt: count() }).from(ticketsTable).where(eq(ticketsTable.satisfaction, "good")).then((r) => r[0]),
       db.select({ cnt: count() }).from(ticketsTable).where(sql`${ticketsTable.satisfaction} IS NOT NULL`).then((r) => r[0]),
     ]);

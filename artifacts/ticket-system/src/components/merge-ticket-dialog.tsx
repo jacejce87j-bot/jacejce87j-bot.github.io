@@ -50,7 +50,7 @@ export function MergeTicketDialog({
 
   const { data: ticketsData } = useListTickets(
     { limit: 50, q: search || undefined },
-    { query: { enabled: open } }
+    { query: { enabled: open, queryKey: getListTicketsQueryKey() } }
   );
 
   const merge = useMergeTicket({

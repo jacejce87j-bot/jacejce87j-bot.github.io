@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { useListTickets, getListTicketsQueryKey } from "@workspace/api-client-react";
-import { TicketStatus, TicketPriority } from "@workspace/api-client-react/src/generated/api.schemas";
+import { TicketStatus, TicketPriority } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

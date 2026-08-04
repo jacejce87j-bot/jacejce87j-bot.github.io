@@ -1,9 +1,17 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { agentsTable } from "./agents";
 import { contactsTable } from "./contacts";
 import { organizationsTable } from "./organizations";
+
+export type TicketAttachment = {
+  name: string;
+  size: number;
+  contentType: string;
+  objectPath: string;
+  uploadedAt: string;
+};
 
 export const ticketsTable = pgTable("tickets", {
   id: serial("id").primaryKey(),
@@ -22,6 +30,7 @@ export const ticketsTable = pgTable("tickets", {
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   satisfaction: text("satisfaction"),
   mergedIntoId: integer("merged_into_id"),
+  attachments: jsonb("attachments").$type<TicketAttachment[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

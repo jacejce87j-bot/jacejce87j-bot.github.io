@@ -23,6 +23,12 @@ tags:
     description: Tag operations
   - name: dashboard
     description: Dashboard and analytics operations
+  - name: Auth
+    description: Browser authentication endpoints
+  - name: settings
+    description: Administrative settings
+  - name: storage
+    description: Secure file storage
 
 paths:
   /healthz:
@@ -173,6 +179,25 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a secure upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
 
   /tickets/{id}/merge:
     post:
@@ -648,6 +673,112 @@ paths:
               schema:
                 $ref: "#/components/schemas/SlaHealth"
 
+  /settings/sla-policies:
+    get:
+      operationId: listSlaPolicies
+      tags: [settings]
+      summary: List SLA policies
+      responses:
+        "200":
+          description: SLA policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SlaPolicy"
+    post:
+      operationId: createSlaPolicy
+      tags: [settings]
+      summary: Create an SLA policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SlaPolicyInput"
+      responses:
+        "201":
+          description: Created SLA policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlaPolicy"
+
+  /settings/sla-policies/{id}:
+    patch:
+      operationId: updateSlaPolicy
+      tags: [settings]
+      summary: Update an SLA policy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SlaPolicyUpdate"
+      responses:
+        "200":
+          description: Updated SLA policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlaPolicy"
+
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the current authenticated user
+      responses:
+        "200":
+          description: Authentication state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start browser login
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to login provider
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete browser login
+      responses:
+        "302":
+          description: Redirect after login
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Log out
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect after logout
+
 components:
   schemas:
     HealthStatus:
@@ -707,6 +838,10 @@ components:
           enum: [good, bad, null]
         mergedIntoId:
           type: ["integer", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAttachment"
         commentCount:
           type: integer
         createdAt:
@@ -755,6 +890,10 @@ components:
             type: string
         dueAt:
           type: ["string", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAttachment"
 
     TicketUpdate:
       type: object
@@ -790,6 +929,25 @@ components:
           type: ["string", "null"]
         satisfaction:
           type: ["string", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketAttachment"
+
+    TicketAttachment:
+      type: object
+      required: [name, size, contentType, objectPath, uploadedAt]
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+        objectPath:
+          type: string
+        uploadedAt:
+          type: string
 
     TicketPage:
       type: object
@@ -861,6 +1019,113 @@ components:
             type: string
         notes:
           type: string
+
+    SlaPolicy:
+      type: object
+      required: [id, name, priority, firstResponseMinutes, resolutionMinutes, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        firstResponseMinutes:
+          type: integer
+        resolutionMinutes:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    SlaPolicyInput:
+      type: object
+      required: [name, priority, firstResponseMinutes, resolutionMinutes]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        firstResponseMinutes:
+          type: integer
+          minimum: 1
+        resolutionMinutes:
+          type: integer
+          minimum: 1
+        isActive:
+          type: boolean
+
+    SlaPolicyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        firstResponseMinutes:
+          type: integer
+          minimum: 1
+        resolutionMinutes:
+          type: integer
+          minimum: 1
+        isActive:
+          type: boolean
+
+    RequestUploadUrlBody:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+
+    RequestUploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath, metadata]
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/RequestUploadUrlBody"
+
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl, role]
+      properties:
+        id:
+          type: string
+        email:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [agent, admin, supervisor]
+
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
 
     ContactUpdate:
       type: object

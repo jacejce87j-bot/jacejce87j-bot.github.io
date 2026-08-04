@@ -101,6 +101,13 @@ export const ListTicketsResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
   "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -128,7 +135,14 @@ export const CreateTicketBody = zod.object({
   "requesterId": zod.number().nullish(),
   "organizationId": zod.number().nullish(),
   "tags": zod.array(zod.string()).optional(),
-  "dueAt": zod.string().nullish()
+  "dueAt": zod.string().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional()
 })
 
 
@@ -203,6 +217,13 @@ export const GetTicketResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
   "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -231,7 +252,14 @@ export const UpdateTicketBody = zod.object({
   "organizationId": zod.number().nullish(),
   "tags": zod.array(zod.string()).optional(),
   "dueAt": zod.string().nullish(),
-  "satisfaction": zod.string().nullish()
+  "satisfaction": zod.string().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional()
 })
 
 export const UpdateTicketResponse = zod.object({
@@ -298,6 +326,13 @@ export const UpdateTicketResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
   "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -309,6 +344,26 @@ export const UpdateTicketResponse = zod.object({
  */
 export const DeleteTicketParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Request a secure upload URL
+ */
+export const RequestUploadUrlBody = zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string()
+})
+
+export const RequestUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string(),
+  "metadata": zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string()
+})
 })
 
 
@@ -388,6 +443,13 @@ export const MergeTicketResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
   "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -650,6 +712,13 @@ export const ListContactTicketsResponseItem = zod.object({
   "resolvedAt": zod.string().nullish(),
   "satisfaction": zod.union([zod.literal('good'),zod.literal('bad'),zod.literal(null)]).nullish(),
   "mergedIntoId": zod.number().nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "uploadedAt": zod.string()
+})).optional(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -911,6 +980,101 @@ export const GetSlaHealthResponse = zod.object({
   "atRisk": zod.number(),
   "breached": zod.number(),
   "total": zod.number()
+})
+
+
+/**
+ * @summary List SLA policies
+ */
+export const ListSlaPoliciesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "firstResponseMinutes": zod.number(),
+  "resolutionMinutes": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListSlaPoliciesResponse = zod.array(ListSlaPoliciesResponseItem)
+
+
+/**
+ * @summary Create an SLA policy
+ */
+
+
+
+
+
+export const CreateSlaPolicyBody = zod.object({
+  "name": zod.string().min(1),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "firstResponseMinutes": zod.number().min(1),
+  "resolutionMinutes": zod.number().min(1),
+  "isActive": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update an SLA policy
+ */
+export const UpdateSlaPolicyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+export const UpdateSlaPolicyBody = zod.object({
+  "name": zod.string().optional(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  "firstResponseMinutes": zod.number().min(1).optional(),
+  "resolutionMinutes": zod.number().min(1).optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateSlaPolicyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "firstResponseMinutes": zod.number(),
+  "resolutionMinutes": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get the current authenticated user
+ */
+export const GetCurrentAuthUserResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullable(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable(),
+  "role": zod.enum(['agent', 'admin', 'supervisor'])
+}),zod.null()])
+})
+
+
+/**
+ * @summary Start browser login
+ */
+export const BeginBrowserLoginQueryParams = zod.object({
+  "returnTo": zod.coerce.string().optional()
+})
+
+
+/**
+ * @summary Log out
+ */
+export const LogoutBrowserSessionQueryParams = zod.object({
+  "returnTo": zod.coerce.string().optional()
 })
 
 

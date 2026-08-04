@@ -127,6 +127,14 @@ export interface Contact {
   updatedAt: string;
 }
 
+export interface TicketAttachment {
+  name: string;
+  size: number;
+  contentType: string;
+  objectPath: string;
+  uploadedAt: string;
+}
+
 export interface Ticket {
   id: number;
   subject: string;
@@ -156,6 +164,7 @@ export interface Ticket {
   satisfaction?: TicketSatisfaction;
   /** @nullable */
   mergedIntoId?: number | null;
+  attachments?: TicketAttachment[];
   commentCount?: number;
   createdAt: string;
   updatedAt: string;
@@ -225,6 +234,7 @@ export interface TicketInput {
   tags?: string[];
   /** @nullable */
   dueAt?: string | null;
+  attachments?: TicketAttachment[];
 }
 
 export type TicketUpdateStatus = typeof TicketUpdateStatus[keyof typeof TicketUpdateStatus];
@@ -288,6 +298,7 @@ export interface TicketUpdate {
   dueAt?: string | null;
   /** @nullable */
   satisfaction?: string | null;
+  attachments?: TicketAttachment[];
 }
 
 export interface TicketPage {
@@ -316,6 +327,106 @@ export interface ContactInput {
   role?: ContactInputRole;
   tags?: string[];
   notes?: string;
+}
+
+export type SlaPolicyPriority = typeof SlaPolicyPriority[keyof typeof SlaPolicyPriority];
+
+
+export const SlaPolicyPriority = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export interface SlaPolicy {
+  id: number;
+  name: string;
+  priority: SlaPolicyPriority;
+  firstResponseMinutes: number;
+  resolutionMinutes: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SlaPolicyInputPriority = typeof SlaPolicyInputPriority[keyof typeof SlaPolicyInputPriority];
+
+
+export const SlaPolicyInputPriority = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export interface SlaPolicyInput {
+  /** @minLength 1 */
+  name: string;
+  priority: SlaPolicyInputPriority;
+  /** @minimum 1 */
+  firstResponseMinutes: number;
+  /** @minimum 1 */
+  resolutionMinutes: number;
+  isActive?: boolean;
+}
+
+export type SlaPolicyUpdatePriority = typeof SlaPolicyUpdatePriority[keyof typeof SlaPolicyUpdatePriority];
+
+
+export const SlaPolicyUpdatePriority = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export interface SlaPolicyUpdate {
+  name?: string;
+  priority?: SlaPolicyUpdatePriority;
+  /** @minimum 1 */
+  firstResponseMinutes?: number;
+  /** @minimum 1 */
+  resolutionMinutes?: number;
+  isActive?: boolean;
+}
+
+export interface RequestUploadUrlBody {
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+export interface RequestUploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  metadata: RequestUploadUrlBody;
+}
+
+export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
+
+
+export const AuthUserRole = {
+  agent: 'agent',
+  admin: 'admin',
+  supervisor: 'supervisor',
+} as const;
+
+export interface AuthUser {
+  id: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  profileImageUrl: string | null;
+  role: AuthUserRole;
+}
+
+export interface AuthUserEnvelope {
+  user: AuthUser | null;
 }
 
 export type ContactUpdateRole = typeof ContactUpdateRole[keyof typeof ContactUpdateRole];
@@ -569,5 +680,13 @@ limit?: number;
 
 export type GetDashboardActivityParams = {
 limit?: number;
+};
+
+export type BeginBrowserLoginParams = {
+returnTo?: string;
+};
+
+export type LogoutBrowserSessionParams = {
+returnTo?: string;
 };
 

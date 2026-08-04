@@ -8,9 +8,11 @@ import {
   useListTicketComments,
   getListTicketCommentsQueryKey,
   useCreateTicketComment,
-  getListTicketsQueryKey
+  getListTicketsQueryKey,
+  type TicketAttachment,
 } from "@workspace/api-client-react";
-import { TicketStatus, TicketPriority } from "@workspace/api-client-react/src/generated/api.schemas";
+import { useUpload } from "@workspace/object-storage-web";
+import { TicketStatus, TicketPriority } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils";
-import { ArrowLeft, Clock, Send, CheckCircle2, Lock, Globe, GitMerge, ArrowRight } from "lucide-react";
+import { ArrowLeft, Clock, Send, CheckCircle2, Lock, Globe, GitMerge, ArrowRight, Paperclip, FileText, Download } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MergeTicketDialog } from "@/components/merge-ticket-dialog";
@@ -66,6 +68,11 @@ export default function TicketDetail() {
   const [newComment, setNewComment] = useState("");
   const [isInternal, setIsInternal] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [isSavingAttachment, setIsSavingAttachment] = useState(false);
+
+  const { uploadFile, isUploading } = useUpload({
+    onError: (error) => toast({ title: "Upload failed", description: error.message, variant: "destructive" }),
+  });
 
   const handleStatusChange = (status: TicketStatus) => {
     updateTicket.mutate({ id: ticketId, data: { status } });
@@ -84,6 +91,42 @@ export default function TicketDetail() {
         isPublic: !isInternal
       }
     });
+  };
+
+  const handleAttachment = async (file: File) => {
+    if (!ticket) return;
+    setIsSavingAttachment(true);
+    const uploaded = await uploadFile(file);
+    if (!uploaded) {
+      setIsSavingAttachment(false);
+      return;
+    }
+
+    const attachment: TicketAttachment = {
+      name: uploaded.metadata.name,
+      size: uploaded.metadata.size,
+      contentType: uploaded.metadata.contentType,
+      objectPath: uploaded.objectPath,
+      uploadedAt: new Date().toISOString(),
+    };
+    updateTicket.mutate({
+      id: ticketId,
+      data: { attachments: [...(ticket.attachments ?? []), attachment] },
+    }, {
+      onSuccess: () => toast({ title: "Attachment added" }),
+      onSettled: () => setIsSavingAttachment(false),
+    });
+  };
+
+  const attachmentUrl = (objectPath: string) => {
+    const relativePath = objectPath.replace(/^\/objects\//, "");
+    return `/api/storage/objects/${relativePath}`;
+  };
+
+  const formatFileSize = (size: number) => {
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   if (isLoadingTicket) {
@@ -189,6 +232,53 @@ export default function TicketDetail() {
                   </CardContent>
                 </Card>
               </div>
+
+              <Card>
+                <CardHeader className="py-3 px-4 border-b border-border">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-medium text-sm"><Paperclip className="h-4 w-4 text-muted-foreground" /> Attachments</div>
+                    <label className="cursor-pointer">
+                      <Button asChild size="sm" variant="outline" disabled={isUploading || isSavingAttachment}>
+                        <span><Paperclip className="mr-2 h-3.5 w-3.5" /> {isUploading || isSavingAttachment ? "Uploading..." : "Add file"}</span>
+                      </Button>
+                      <input
+                        type="file"
+                        className="sr-only"
+                        disabled={isUploading || isSavingAttachment}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.currentTarget.value = "";
+                          if (file) void handleAttachment(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4">
+                  {ticket.attachments?.length ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {ticket.attachments.map((attachment) => (
+                        <a
+                          key={`${attachment.objectPath}-${attachment.uploadedAt}`}
+                          href={attachmentUrl(attachment.objectPath)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:bg-muted/50"
+                        >
+                          <FileText className="h-8 w-8 shrink-0 text-primary" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{attachment.name}</span>
+                            <span className="text-xs text-muted-foreground">{formatFileSize(attachment.size)} · {attachment.contentType}</span>
+                          </span>
+                          <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No files attached yet.</p>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Comments Thread */}
               {isLoadingComments ? (

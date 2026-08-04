@@ -1,15 +1,39 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout";
-import { useListAgents, getListAgentsQueryKey } from "@workspace/api-client-react";
+import { useListAgents, getListAgentsQueryKey, useCreateAgent } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AgentList() {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", role: "agent" });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data: agents, isLoading } = useListAgents({ 
     query: { 
       queryKey: getListAgentsQueryKey() 
     } 
+  });
+  const createAgent = useCreateAgent({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });
+        setForm({ name: "", email: "", role: "agent" });
+        setOpen(false);
+        toast({ title: "Agent added", description: "The new team member is ready to be assigned tickets." });
+      },
+      onError: () => toast({ title: "Could not add agent", description: "Check the required fields and try again.", variant: "destructive" }),
+    },
   });
 
   return (
@@ -18,8 +42,9 @@ export default function AgentList() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Agents</h2>
-            <p className="text-muted-foreground">Your support team members.</p>
+            <p className="text-muted-foreground">Create and manage the people who work your support queue.</p>
           </div>
+          <Button onClick={() => setOpen(true)}><Plus className="mr-2 h-4 w-4" /> Add agent</Button>
         </div>
 
         {isLoading ? (
@@ -63,6 +88,44 @@ export default function AgentList() {
           </div>
         )}
       </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add agent</DialogTitle>
+            <DialogDescription>Invite a support team member by adding their name, email, and role.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="agent-name">Name *</Label>
+              <Input id="agent-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Jordan Lee" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="agent-email">Email *</Label>
+              <Input id="agent-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="jordan@example.com" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Role</Label>
+              <Select value={form.role} onValueChange={(role) => setForm({ ...form, role })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="agent">Agent</SelectItem>
+                  <SelectItem value="supervisor">Supervisor</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              disabled={createAgent.isPending || !form.name.trim() || !form.email.trim()}
+              onClick={() => createAgent.mutate({ data: { name: form.name.trim(), email: form.email.trim(), role: form.role as "agent" | "admin" | "supervisor" } })}
+            >
+              {createAgent.isPending ? "Adding..." : "Add agent"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

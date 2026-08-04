@@ -5,3 +5,5 @@ export * from "./tickets";
 export * from "./comments";
 export * from "./tags";
 export * from "./activity_events";
+export * from "./sla_policies";
+export * from "./auth";

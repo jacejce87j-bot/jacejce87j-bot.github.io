@@ -5,6 +5,7 @@
  * Ticket Management System API
  * OpenAPI spec version: 0.1.0
  */
+import type { TicketAttachment } from './ticketAttachment';
 import type { TicketInputChannel } from './ticketInputChannel';
 import type { TicketInputPriority } from './ticketInputPriority';
 import type { TicketInputStatus } from './ticketInputStatus';
@@ -27,4 +28,5 @@ export interface TicketInput {
   tags?: string[];
   /** @nullable */
   dueAt?: string | null;
+  attachments?: TicketAttachment[];
 }

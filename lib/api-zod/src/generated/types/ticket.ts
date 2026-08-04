@@ -8,6 +8,7 @@
 import type { Agent } from './agent';
 import type { Contact } from './contact';
 import type { Organization } from './organization';
+import type { TicketAttachment } from './ticketAttachment';
 import type { TicketChannel } from './ticketChannel';
 import type { TicketPriority } from './ticketPriority';
 import type { TicketSatisfaction } from './ticketSatisfaction';
@@ -43,6 +44,7 @@ export interface Ticket {
   satisfaction?: TicketSatisfaction;
   /** @nullable */
   mergedIntoId?: number | null;
+  attachments?: TicketAttachment[];
   commentCount?: number;
   createdAt: string;
   updatedAt: string;

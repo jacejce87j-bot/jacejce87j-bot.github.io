@@ -112,6 +112,7 @@ function serializeTicket(
     resolvedAt: t.resolvedAt?.toISOString() ?? null,
     satisfaction: t.satisfaction,
     mergedIntoId: t.mergedIntoId ?? null,
+    attachments: t.attachments ?? [],
     commentCount,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),

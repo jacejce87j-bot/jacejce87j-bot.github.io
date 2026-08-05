@@ -1,5 +1,5 @@
 import { useAuth } from '@clerk/expo';
-import { configureDevelopmentApiTransport } from '@workspace/api-client-react';
+import { configureNativeApiTransport } from '@workspace/api-client-react';
 import { PropsWithChildren, useEffect, useState } from 'react';
 
 const developmentDomain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -15,7 +15,7 @@ export function DevelopmentApiProvider({ children }: PropsWithChildren) {
       );
     }
 
-    configureDevelopmentApiTransport({
+    configureNativeApiTransport({
       baseUrl: `https://${developmentDomain}`,
       getToken: () => getToken(),
     });

@@ -9,30 +9,30 @@ export type BodyType<T> = T;
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
-type DevelopmentApiTransport = {
+type NativeApiTransport = {
   baseUrl: string;
   getToken: () => Promise<string | null>;
 };
 
-let developmentApiTransport: DevelopmentApiTransport | null = null;
+let nativeApiTransport: NativeApiTransport | null = null;
 
 /**
- * Configures the generated client for the development-only Expo app.
+ * Configures the generated client for a native Expo app.
  *
  * Browser clients intentionally remain same-origin and cookie-based. Expo
- * needs an absolute development API URL and an explicit Clerk bearer token.
+ * needs an absolute API URL and an explicit Clerk bearer token.
  */
-export function configureDevelopmentApiTransport(
-  transport: DevelopmentApiTransport,
+export function configureNativeApiTransport(
+  transport: NativeApiTransport,
 ): void {
-  developmentApiTransport = {
+  nativeApiTransport = {
     ...transport,
     baseUrl: transport.baseUrl.replace(/\/+$/, ""),
   };
 }
 
-export function clearDevelopmentApiTransport(): void {
-  developmentApiTransport = null;
+export function clearNativeApiTransport(): void {
+  nativeApiTransport = null;
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -321,14 +321,14 @@ export async function customFetch<T = unknown>(
 
   const originalUrl = resolveUrl(input);
   const requestUrl =
-    developmentApiTransport &&
+    nativeApiTransport &&
     originalUrl.startsWith("/") &&
     !originalUrl.startsWith("//")
-      ? `${developmentApiTransport.baseUrl}${originalUrl}`
+      ? `${nativeApiTransport.baseUrl}${originalUrl}`
       : originalUrl;
 
-  if (developmentApiTransport && !headers.has("authorization")) {
-    const token = await developmentApiTransport.getToken();
+  if (nativeApiTransport && !headers.has("authorization")) {
+    const token = await nativeApiTransport.getToken();
     if (token) headers.set("authorization", `Bearer ${token}`);
   }
 

@@ -10,3 +10,4 @@
 - [Expo protected attachments](expo-protected-attachments.md) — native attachment downloads need Clerk bearer auth before sharing/opening protected storage files
 - [SupportDesk environment data](supportdesk-environment-data.md) — production Web settings do not automatically exist in the development database used by Expo
 - [Form component context](form-component-context.md) — shadcn FormLabel/FormMessage require FormField/FormItem context; use a native label for standalone controls
+- [Production Expo isolation](production-expo-isolation.md) — production mobile clones must require an explicit HTTPS API origin and use a dedicated Metro build port

@@ -1,6 +1,6 @@
 export * from "./generated/api";
 export * from "./generated/api.schemas";
 export {
-  clearDevelopmentApiTransport,
-  configureDevelopmentApiTransport,
+  clearNativeApiTransport,
+  configureNativeApiTransport,
 } from "./custom-fetch";

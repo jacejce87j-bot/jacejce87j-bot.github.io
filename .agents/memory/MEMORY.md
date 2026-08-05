@@ -5,3 +5,4 @@
 - [Clerk auth architecture](clerk-auth-architecture.md) — SupportDesk identity comes from Clerk; local users remain the source of application roles
 - [Clerk development providers](clerk-development-providers.md) — Gmail sign-in works in the managed Clerk development environment
 - [SupportDesk mobile agent app](mobile-agent-app.md) — Expo uses Clerk bearer tokens and server-enforced assignment-scoped ticket access
+- [Mobile production routing](mobile-production-routing.md) — production Expo bundles need an explicit API domain; workspace runtime domains may still be development-scoped

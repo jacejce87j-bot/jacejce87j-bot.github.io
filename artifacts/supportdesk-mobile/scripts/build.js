@@ -129,7 +129,7 @@ function getExpoPublicReplId() {
   return process.env.REPL_ID || process.env.EXPO_PUBLIC_REPL_ID;
 }
 
-async function startMetro(expoPublicDomain, expoPublicReplId) {
+async function startMetro(expoPublicDomain, apiDomain, expoPublicReplId) {
   const isRunning = await checkMetroHealth();
   if (isRunning) {
     console.log('Metro already running');
@@ -141,6 +141,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   const env = {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
+    EXPO_PUBLIC_API_DOMAIN: apiDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
     EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY:
       process.env.CLERK_PUBLISHABLE_KEY || '',
@@ -532,6 +533,7 @@ async function main() {
   setupSignalHandlers();
 
   const domain = getDeploymentDomain();
+  const apiDomain = process.env.EXPO_PUBLIC_API_DOMAIN || domain;
   const expoPublicReplId = getExpoPublicReplId();
   const baseUrl = `https://${domain}`;
   const timestamp = `${Date.now()}-${process.pid}`;
@@ -539,7 +541,7 @@ async function main() {
   prepareDirectories(timestamp);
   clearMetroCache();
 
-  await startMetro(domain, expoPublicReplId);
+  await startMetro(domain, apiDomain, expoPublicReplId);
 
   const downloadTimeout = 600000;
   const downloadPromise = downloadBundlesAndManifests(timestamp);

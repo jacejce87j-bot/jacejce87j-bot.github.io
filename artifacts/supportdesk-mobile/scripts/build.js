@@ -144,14 +144,10 @@ async function startMetro(expoPublicDomain, apiDomain, expoPublicReplId) {
     EXPO_PUBLIC_API_DOMAIN: apiDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
     EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY:
-      process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-      process.env.CLERK_PUBLISHABLE_KEY ||
-      '',
+      process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || '',
     EXPO_PUBLIC_CLERK_PROXY_URL:
       process.env.EXPO_PUBLIC_CLERK_PROXY_URL ||
-      (process.env.CLERK_PROXY_URL
-        ? `https://${expoPublicDomain}${process.env.CLERK_PROXY_URL}`
-        : ''),
+      '',
   };
 
   if (expoPublicReplId) {
@@ -537,7 +533,9 @@ async function main() {
   setupSignalHandlers();
 
   const domain = getDeploymentDomain();
-  const apiDomain = process.env.EXPO_PUBLIC_API_DOMAIN || domain;
+  const apiDomain =
+    process.env.EXPO_PUBLIC_API_DOMAIN ||
+    'zendesk-salesforce--jacejce87j.replit.app';
   const expoPublicReplId = getExpoPublicReplId();
   const baseUrl = `https://${domain}`;
   const timestamp = `${Date.now()}-${process.pid}`;

@@ -32,7 +32,9 @@ export function GoogleAuthButton({ onError }: Props) {
     try {
       const redirectUrl =
         Platform.OS === 'web'
-          ? AuthSession.makeRedirectUri()
+          ? AuthSession.makeRedirectUri({
+              path: 'oauth',
+            })
           : AuthSession.makeRedirectUri({
               scheme: 'supportdesk-agent-dev',
               path: 'oauth',

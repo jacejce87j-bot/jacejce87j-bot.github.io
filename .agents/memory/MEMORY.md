@@ -6,3 +6,4 @@
 - [Clerk development providers](clerk-development-providers.md) — Gmail sign-in works in the managed Clerk development environment
 - [Expo preview layout](expo-preview-layout.md) — blank web previews can come from provider/scroll sizing; keep root wrappers minimal and establish explicit flex dimensions
 - [Expo development API boundary](expo-development-api-boundary.md) — native development clients need an explicit API domain plus Clerk bearer tokens; browser transport stays cookie-based
+- [Expo Clerk OAuth callback](expo-clerk-oauth-callback.md) — Google OAuth redirect targets must have a matching Expo Router callback screen

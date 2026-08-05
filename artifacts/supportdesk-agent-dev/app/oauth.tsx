@@ -1,6 +1,5 @@
 import { useAuth } from '@clerk/expo';
-import { useSignIn, useSignUp } from '@clerk/expo/legacy';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
@@ -8,20 +7,15 @@ import { useColors } from '@/hooks/useColors';
 /**
  * OAuth callback target for Clerk's Expo SSO flow.
  *
- * Native Android can recreate the route that started the browser flow. In
- * that case the original startSSOFlow promise cannot finish the session, so
- * this route performs Clerk's documented rotating-token recovery itself.
+ * Clerk's useSSO() owns the one-time rotating-token exchange. This route must
+ * stay passive: attempting another signIn.reload() here consumes the nonce a
+ * second time and produces an empty JSON response on Android.
  */
 export default function OAuthCallbackScreen() {
   const colors = useColors();
   const { isLoaded, isSignedIn } = useAuth();
-  const { signIn, setActive: setSignInActive } = useSignIn();
-  const { signUp } = useSignUp();
-  const { rotating_token_nonce: nonceParam } =
-    useLocalSearchParams<{ rotating_token_nonce?: string | string[] }>();
   const [error, setError] = useState('');
   const [isProcessing, setIsProcessing] = useState(true);
-  const hasStarted = useRef(false);
   const hasNavigated = useRef(false);
 
   const navigateToWorkspace = () => {
@@ -37,77 +31,19 @@ export default function OAuthCallbackScreen() {
   }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
-    if (!isLoaded || isSignedIn || !signIn || !signUp || !setSignInActive || hasStarted.current) {
-      return;
-    }
-
-    hasStarted.current = true;
-    let cancelled = false;
-    const nonce = Array.isArray(nonceParam) ? nonceParam[0] : nonceParam;
-
     const timeout = setTimeout(() => {
-      if (!cancelled) {
+      if (!isSignedIn) {
         setIsProcessing(false);
-        setError('Google sign-in took too long to complete. Please try again.');
+        setError(
+          'Google sign-in did not return to the workspace. Please try again.',
+        );
       }
-    }, 15000);
-
-    const completeNativeSignIn = async () => {
-      try {
-        if (!nonce) {
-          throw new Error(
-            'The Google callback did not include the required sign-in token. Please try again.',
-          );
-        }
-
-        await signIn.reload({ rotatingTokenNonce: nonce });
-
-        if (signIn.firstFactorVerification.status === 'transferable') {
-          await signUp.create({ transfer: true });
-        }
-
-        const createdSessionId = signUp.createdSessionId ?? signIn.createdSessionId;
-        if (!createdSessionId) {
-          const missingFields = signUp.missingFields.map(String);
-          throw new Error(
-            missingFields.length
-              ? `Google sign-in needs: ${missingFields.join(', ')}.`
-              : 'Google sign-in returned without a completed session. Please try again.',
-          );
-        }
-
-        await setSignInActive({
-          session: createdSessionId,
-          navigate: navigateToWorkspace,
-        });
-      } catch (caughtError) {
-        if (!cancelled) {
-          setError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : 'Google sign-in could not be completed. Please try again.',
-          );
-          setIsProcessing(false);
-        }
-      } finally {
-        clearTimeout(timeout);
-      }
-    };
-
-    void completeNativeSignIn();
+    }, 20000);
 
     return () => {
-      cancelled = true;
       clearTimeout(timeout);
     };
-  }, [
-    isLoaded,
-    isSignedIn,
-    nonceParam,
-    setSignInActive,
-    signIn,
-    signUp,
-  ]);
+  }, [isSignedIn]);
 
   return (
     <>

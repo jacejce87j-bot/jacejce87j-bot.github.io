@@ -11,7 +11,6 @@ import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wo
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AppLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -84,14 +83,7 @@ function AppRoutes() {
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/tickets" component={TicketList} />
-          <Route
-            path="/tickets/new"
-            component={() => (
-              <RouteErrorBoundary>
-                <NewTicket />
-              </RouteErrorBoundary>
-            )}
-          />
+          <Route path="/tickets/new" component={TicketCreationRoute} />
           <Route path="/tickets/:id" component={TicketDetail} />
           <Route path="/contacts" component={ContactList} />
           <Route path="/contacts/:id" component={ContactDetail} />
@@ -103,6 +95,14 @@ function AppRoutes() {
         </>
       )}
     </Switch>
+  );
+}
+
+function TicketCreationRoute() {
+  return (
+    <RouteErrorBoundary>
+      <NewTicket />
+    </RouteErrorBoundary>
   );
 }
 
@@ -128,19 +128,49 @@ class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, RouteErrorBo
   render() {
     if (this.state.error) {
       return (
-        <AppLayout>
-          <div className="flex min-h-full items-center justify-center p-8">
-            <div className="max-w-lg rounded-xl border border-destructive/30 bg-card p-8 text-center shadow-sm">
-              <h1 className="text-xl font-semibold">Ticket creation could not load</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                The form encountered an unexpected error. Reload the page to try again.
-              </p>
-              <Button type="button" className="mt-6" onClick={() => window.location.reload()}>
-                Reload ticket form
-              </Button>
-            </div>
+        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+          <div className="w-full max-w-lg rounded-xl border border-destructive/30 bg-card p-8 text-center shadow-sm">
+            <h1 className="text-xl font-semibold">Ticket creation could not load</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              The form encountered an unexpected error. Reload the page to try again.
+            </p>
+            <Button type="button" className="mt-6" onClick={() => window.location.reload()}>
+              Reload ticket form
+            </Button>
           </div>
-        </AppLayout>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+class AppErrorBoundary extends Component<RouteErrorBoundaryProps, RouteErrorBoundaryState> {
+  state: RouteErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): RouteErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("SupportDesk application failed to render", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+          <div className="w-full max-w-lg rounded-xl border border-destructive/30 bg-card p-8 text-center shadow-sm">
+            <h1 className="text-xl font-semibold">SupportDesk could not load</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              An unexpected error stopped this page from rendering. Reload to try again.
+            </p>
+            <Button type="button" className="mt-6" onClick={() => window.location.reload()}>
+              Reload SupportDesk
+            </Button>
+          </div>
+        </div>
       );
     }
 
@@ -244,13 +274,15 @@ function ClerkApp() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={basePath}>
-          <ClerkApp />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={basePath}>
+            <ClerkApp />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }

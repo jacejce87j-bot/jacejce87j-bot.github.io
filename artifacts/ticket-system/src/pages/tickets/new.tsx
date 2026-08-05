@@ -57,10 +57,10 @@ export default function NewTicket() {
   const organizationsQuery = useListOrganizations({ limit: 100 });
   const agentsQuery = useListAgents();
   const templatesQuery = useListTicketTemplates();
-  const contacts = contactsQuery.data;
-  const organizations = organizationsQuery.data;
-  const agents = agentsQuery.data;
-  const templates = templatesQuery.data;
+  const contacts = Array.isArray(contactsQuery.data?.data) ? contactsQuery.data.data : [];
+  const organizations = Array.isArray(organizationsQuery.data?.data) ? organizationsQuery.data.data : [];
+  const agents = Array.isArray(agentsQuery.data) ? agentsQuery.data : [];
+  const templates = Array.isArray(templatesQuery.data) ? templatesQuery.data : [];
   const supportingQueries = [contactsQuery, organizationsQuery, agentsQuery, templatesQuery];
   const hasSupportingQueryError = supportingQueries.some((query) => query.isError);
 
@@ -155,7 +155,7 @@ export default function NewTicket() {
                 {templates?.some((template) => template.isActive) && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <FormLabel className="mb-0">Description template</FormLabel>
+                      <label className="text-sm font-medium leading-none">Description template</label>
                       <span className="text-xs text-muted-foreground">(optional)</span>
                     </div>
                     <Select
@@ -215,7 +215,7 @@ export default function NewTicket() {
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="none">No requester</SelectItem>
-                            {contacts?.data.map(contact => (
+                            {contacts.map(contact => (
                               <SelectItem key={contact.id} value={contact.id.toString()}>
                                 {contact.name} ({contact.email})
                               </SelectItem>
@@ -244,7 +244,7 @@ export default function NewTicket() {
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="none">No organization</SelectItem>
-                            {organizations?.data.map(org => (
+                            {organizations.map(org => (
                               <SelectItem key={org.id} value={org.id.toString()}>
                                 {org.name}
                               </SelectItem>

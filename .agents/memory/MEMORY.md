@@ -9,3 +9,4 @@
 - [Expo Clerk OAuth callback](expo-clerk-oauth-callback.md) — Google OAuth redirect targets must have a matching Expo Router callback screen
 - [Expo protected attachments](expo-protected-attachments.md) — native attachment downloads need Clerk bearer auth before sharing/opening protected storage files
 - [SupportDesk environment data](supportdesk-environment-data.md) — production Web settings do not automatically exist in the development database used by Expo
+- [Form component context](form-component-context.md) — shadcn FormLabel/FormMessage require FormField/FormItem context; use a native label for standalone controls

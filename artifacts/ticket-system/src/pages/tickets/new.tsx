@@ -53,10 +53,16 @@ export default function NewTicket() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: contacts } = useListContacts({ limit: 100 });
-  const { data: organizations } = useListOrganizations({ limit: 100 });
-  const { data: agents } = useListAgents();
-  const { data: templates } = useListTicketTemplates();
+  const contactsQuery = useListContacts({ limit: 100 });
+  const organizationsQuery = useListOrganizations({ limit: 100 });
+  const agentsQuery = useListAgents();
+  const templatesQuery = useListTicketTemplates();
+  const contacts = contactsQuery.data;
+  const organizations = organizationsQuery.data;
+  const agents = agentsQuery.data;
+  const templates = templatesQuery.data;
+  const supportingQueries = [contactsQuery, organizationsQuery, agentsQuery, templatesQuery];
+  const hasSupportingQueryError = supportingQueries.some((query) => query.isError);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -117,6 +123,20 @@ export default function NewTicket() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                {hasSupportingQueryError && (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    <p>Some ticket options could not be loaded. You can still complete the basic fields, or retry now.</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => void Promise.all(supportingQueries.map((query) => query.refetch()))}
+                    >
+                      Retry ticket options
+                    </Button>
+                  </div>
+                )}
                 
                 <FormField
                   control={form.control}

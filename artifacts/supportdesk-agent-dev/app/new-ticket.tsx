@@ -209,9 +209,23 @@ export default function NewTicketScreen() {
           </View>
         ) : (
           <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
-            {templatesQuery.isLoading ? 'Loading templates…' : 'No active templates available.'}
+            {templatesQuery.isLoading
+              ? 'Loading templates…'
+              : templatesQuery.isError
+                ? 'Templates could not be loaded.'
+                : 'No active templates available.'}
           </Text>
         )}
+        {templatesQuery.isError ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading templates"
+            onPress={() => void templatesQuery.refetch()}
+            style={({ pressed }) => [styles.retryLink, pressed && styles.pressed]}
+          >
+            <Text style={[styles.retryLinkText, { color: colors.primary }]}>Retry loading templates</Text>
+          </Pressable>
+        ) : null}
         <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
           Selecting a template fills the description, which you can still edit.
         </Text>
@@ -367,6 +381,8 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 24 },
   label: { fontFamily: 'Inter_600SemiBold', fontSize: 13, marginBottom: 9, marginTop: 13 },
   helperText: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, marginTop: -3 },
+  retryLink: { alignSelf: 'flex-start', paddingVertical: 4, marginTop: 2 },
+  retryLinkText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   input: { minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, fontFamily: 'Inter_400Regular', fontSize: 15 },
   multilineInput: { minHeight: 120, paddingTop: 14 },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

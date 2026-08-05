@@ -8,3 +8,4 @@
 - [Expo development API boundary](expo-development-api-boundary.md) — native development clients need an explicit API domain plus Clerk bearer tokens; browser transport stays cookie-based
 - [Expo Clerk OAuth callback](expo-clerk-oauth-callback.md) — Google OAuth redirect targets must have a matching Expo Router callback screen
 - [Expo protected attachments](expo-protected-attachments.md) — native attachment downloads need Clerk bearer auth before sharing/opening protected storage files
+- [SupportDesk environment data](supportdesk-environment-data.md) — production Web settings do not automatically exist in the development database used by Expo

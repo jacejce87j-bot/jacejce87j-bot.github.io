@@ -273,7 +273,23 @@ export default function NewTicketScreen() {
             </Pressable>
           ))}
         </View>
-        {agentsQuery.isLoading ? <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Loading agents…</Text> : null}
+        {agentsQuery.isLoading ? (
+          <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Loading agents…</Text>
+        ) : agentsQuery.isError ? (
+          <>
+            <Text style={[styles.helperText, { color: colors.destructive }]}>
+              Agents could not be loaded. Check the workspace connection.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading agents"
+              onPress={() => void agentsQuery.refetch()}
+              style={({ pressed }) => [styles.retryLink, pressed && styles.pressed]}
+            >
+              <Text style={[styles.retryLinkText, { color: colors.primary }]}>Retry loading agents</Text>
+            </Pressable>
+          </>
+        ) : null}
 
         <View style={styles.attachmentHeader}>
           <Text style={[styles.label, styles.attachmentLabel, { color: colors.foreground }]}>Attachments</Text>

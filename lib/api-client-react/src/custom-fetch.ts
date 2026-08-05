@@ -334,7 +334,12 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: requestUrl };
 
-  const response = await fetch(requestUrl, { ...init, method, headers });
+  const response = await fetch(requestUrl, {
+    ...init,
+    method,
+    headers,
+    ...(nativeApiTransport && method === "GET" ? { cache: "no-store" } : {}),
+  });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

@@ -11,3 +11,4 @@
 - [SupportDesk environment data](supportdesk-environment-data.md) — production Web settings do not automatically exist in the development database used by Expo
 - [Form component context](form-component-context.md) — shadcn FormLabel/FormMessage require FormField/FormItem context; use a native label for standalone controls
 - [Production Expo isolation](production-expo-isolation.md) — production mobile clones must require an explicit HTTPS API origin and use a dedicated Metro build port
+- [Native API cache handling](native-api-cache.md) — native GET requests must bypass conditional caching because a 304 has no body and can look like valid empty data

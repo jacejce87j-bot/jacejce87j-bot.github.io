@@ -138,6 +138,17 @@ export default function AgentHomeScreen() {
             {ticketsQuery.data?.total ?? 0} total
           </Text>
         </View>
+        {agentsQuery.isError ? (
+          <View style={[styles.agentWarning, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="users" size={16} color={colors.destructive} />
+            <Text style={[styles.agentWarningText, { color: colors.mutedForeground }]}>
+              Agent directory unavailable.
+            </Text>
+            <Pressable onPress={() => void agentsQuery.refetch()}>
+              <Text style={[styles.retryText, { color: colors.primary }]}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {ticketsQuery.isLoading ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <ActivityIndicator color={colors.primary} />
@@ -491,6 +502,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 12,
+  },
+  agentWarning: {
+    minHeight: 38,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  agentWarningText: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
   },
   actionButton: {
     minHeight: 34,

@@ -9,6 +9,7 @@ import {
   getListTicketCommentsQueryKey,
   useCreateTicketComment,
   getListTicketsQueryKey,
+  useListAgents,
   type TicketAttachment,
 } from "@workspace/api-client-react";
 import { useUpload } from "@workspace/object-storage-web";
@@ -44,6 +45,7 @@ export default function TicketDetail() {
       queryKey: getListTicketCommentsQueryKey(ticketId)
     }
   });
+  const agentsQuery = useListAgents();
 
   const updateTicket = useUpdateTicket({
     mutation: {
@@ -82,6 +84,13 @@ export default function TicketDetail() {
 
   const handlePriorityChange = (priority: TicketPriority) => {
     updateTicket.mutate({ id: ticketId, data: { priority } });
+  };
+
+  const handleAssigneeChange = (value: string) => {
+    updateTicket.mutate({
+      id: ticketId,
+      data: { assigneeId: value === "unassigned" ? null : Number(value) },
+    });
   };
 
   const handleAddComment = () => {
@@ -517,22 +526,27 @@ export default function TicketDetail() {
 
                 <div>
                   <div className="text-xs text-muted-foreground mb-1.5">Assignee</div>
-                  {ticket.assignee ? (
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-primary/10 text-primary">{getInitials(ticket.assignee.name)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="text-sm font-medium">
-                          {ticket.assignee.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Support Agent
-                        </div>
-                      </div>
+                  <Select
+                    value={ticket.assigneeId == null ? "unassigned" : String(ticket.assigneeId)}
+                    onValueChange={handleAssigneeChange}
+                    disabled={agentsQuery.isLoading || updateTicket.isPending}
+                  >
+                    <SelectTrigger className="w-full h-9 text-sm">
+                      <SelectValue placeholder={agentsQuery.isLoading ? "Loading agents..." : "Select assignee"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {agentsQuery.data?.map((agent) => (
+                        <SelectItem key={agent.id} value={String(agent.id)}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {agentsQuery.isError && (
+                    <div className="text-xs text-destructive mt-1.5">
+                      Agents could not be loaded. Refresh and try again.
                     </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground italic">Unassigned</div>
                   )}
                 </div>
 

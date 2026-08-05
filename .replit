@@ -38,3 +38,6 @@ channel = "stable-25_05"
 
 [userenv.production]
 EXPO_PUBLIC_API_DOMAIN = "zendesk-salesforce--jacejce87.replit.app"
+
+[userenv.development]
+EXPO_PUBLIC_API_DOMAIN = "zendesk-salesforce--jacejce87.replit.app"

@@ -9,6 +9,32 @@ export type BodyType<T> = T;
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
+type DevelopmentApiTransport = {
+  baseUrl: string;
+  getToken: () => Promise<string | null>;
+};
+
+let developmentApiTransport: DevelopmentApiTransport | null = null;
+
+/**
+ * Configures the generated client for the development-only Expo app.
+ *
+ * Browser clients intentionally remain same-origin and cookie-based. Expo
+ * needs an absolute development API URL and an explicit Clerk bearer token.
+ */
+export function configureDevelopmentApiTransport(
+  transport: DevelopmentApiTransport,
+): void {
+  developmentApiTransport = {
+    ...transport,
+    baseUrl: transport.baseUrl.replace(/\/+$/, ""),
+  };
+}
+
+export function clearDevelopmentApiTransport(): void {
+  developmentApiTransport = null;
+}
+
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
 }
@@ -293,9 +319,22 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  const originalUrl = resolveUrl(input);
+  const requestUrl =
+    developmentApiTransport &&
+    originalUrl.startsWith("/") &&
+    !originalUrl.startsWith("//")
+      ? `${developmentApiTransport.baseUrl}${originalUrl}`
+      : originalUrl;
 
-  const response = await fetch(input, { ...init, method, headers });
+  if (developmentApiTransport && !headers.has("authorization")) {
+    const token = await developmentApiTransport.getToken();
+    if (token) headers.set("authorization", `Bearer ${token}`);
+  }
+
+  const requestInfo = { method, url: requestUrl };
+
+  const response = await fetch(requestUrl, { ...init, method, headers });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
+import { GoogleAuthButton } from '@/components/GoogleAuthButton';
 
 export default function SignInScreen() {
   const colors = useColors();
@@ -13,6 +14,7 @@ export default function SignInScreen() {
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [googleError, setGoogleError] = useState('');
   const isLoading = fetchStatus === 'fetching';
 
   const finishSignIn = async () => {
@@ -102,6 +104,13 @@ export default function SignInScreen() {
               {errors.fields.password && <Text style={styles.error}>{errors.fields.password.message}</Text>}
             </View>
             <AuthButton label="Sign in" loading={isLoading} disabled={!emailAddress.trim() || !password} onPress={handleSubmit} colors={colors} />
+            <View style={styles.divider}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>or</Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            </View>
+            <GoogleAuthButton onError={setGoogleError} />
+            {googleError ? <Text style={styles.error}>{googleError}</Text> : null}
             <View style={styles.footerRow}>
               <Text style={[styles.footerText, { color: colors.mutedForeground }]}>New to SupportDesk?</Text>
               <Link href="/(auth)/sign-up" asChild>
@@ -152,6 +161,9 @@ const styles = StyleSheet.create({
   footerText: { fontFamily: 'Inter_400Regular', fontSize: 13 },
   link: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   textButton: { alignItems: 'center', marginTop: 16 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { fontFamily: 'Inter_400Regular', fontSize: 12 },
   devBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: 8, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 8, marginTop: 34 },
   devDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#D99027' },
   devText: { fontFamily: 'Inter_500Medium', fontSize: 11 },

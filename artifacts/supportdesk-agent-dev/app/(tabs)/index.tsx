@@ -1,20 +1,34 @@
 import { useClerk, useUser } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { getListTicketsQueryKey, useListTickets } from '@workspace/api-client-react';
 
 export default function AgentHomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const ticketsQuery = useListTickets(
+    { limit: 10, sortBy: 'updatedAt', sortDir: 'desc' },
+    {
+      query: {
+        queryKey: getListTicketsQueryKey({ limit: 10, sortBy: 'updatedAt', sortDir: 'desc' }),
+        enabled: Boolean(user),
+      },
+    },
+  );
   const firstName = user?.firstName || user?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Agent';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.content, { paddingTop: insets.top + 24 }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}
+        contentInsetAdjustmentBehavior="never"
+      >
         <View style={styles.greetingRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>SUPPORTDESK AGENT</Text>
@@ -37,26 +51,73 @@ export default function AgentHomeScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.cardTitle, { color: colors.foreground }]}>Development environment</Text>
             <Text style={[styles.cardText, { color: colors.mutedForeground }]}>
-              Authentication is connected. Ticket data is the next development slice.
+              Authentication and ticket data are connected to the development API.
             </Text>
           </View>
           <View style={[styles.statusDot, { backgroundColor: '#2FA36B' }]} />
         </View>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Create a new ticket"
+          onPress={() => router.push('/new-ticket')}
+          style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+        >
+          <Feather name="plus" size={18} color={colors.primaryForeground} />
+          <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create ticket</Text>
+        </Pressable>
+
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My queue</Text>
-          <Text style={[styles.sectionMeta, { color: colors.mutedForeground }]}>Coming next</Text>
-        </View>
-        <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
-            <Feather name="inbox" size={22} color={colors.mutedForeground} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No tickets loaded yet</Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            This clean development build is ready for the new API boundary.
+          <Text style={[styles.sectionMeta, { color: colors.mutedForeground }]}>
+            {ticketsQuery.data?.total ?? 0} total
           </Text>
         </View>
-      </View>
+        {ticketsQuery.isLoading ? (
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Loading development tickets…</Text>
+          </View>
+        ) : ticketsQuery.isError ? (
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
+              <Feather name="alert-circle" size={22} color={colors.destructive} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Ticket service unavailable</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              Check the development API workflow and try again.
+            </Text>
+            <Pressable onPress={() => void ticketsQuery.refetch()} style={[styles.retryButton, { backgroundColor: colors.secondary }]}>
+              <Text style={[styles.retryText, { color: colors.secondaryForeground }]}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : ticketsQuery.data?.data.length ? (
+          <View style={styles.ticketList}>
+            {ticketsQuery.data.data.map((ticket) => (
+              <View key={ticket.id} style={[styles.ticketCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.ticketTopRow}>
+                  <Text style={[styles.ticketId, { color: colors.primary }]}>#{ticket.id}</Text>
+                  <Text style={[styles.ticketStatus, { color: colors.mutedForeground }]}>{ticket.status.replace('_', ' ')}</Text>
+                </View>
+                <Text style={[styles.ticketSubject, { color: colors.foreground }]} numberOfLines={2}>{ticket.subject}</Text>
+                <Text style={[styles.ticketMeta, { color: colors.mutedForeground }]}>
+                  {ticket.priority} priority · {ticket.type}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
+              <Feather name="inbox" size={22} color={colors.mutedForeground} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No tickets yet</Text>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              Create the first development ticket from this workspace.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 18, borderTopColor: colors.border }]}>
         <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Signed in as {user?.primaryEmailAddress?.emailAddress || 'development user'}</Text>
@@ -82,6 +143,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 22,
     gap: 22,
+  },
+  scroll: {
+    flex: 1,
   },
   greetingRow: {
     flexDirection: 'row',
@@ -160,6 +224,52 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
   },
+  createButton: {
+    minHeight: 48,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  createButtonText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
+  ticketList: {
+    gap: 10,
+  },
+  ticketCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 14,
+  },
+  ticketTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ticketId: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+  },
+  ticketStatus: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    textTransform: 'capitalize',
+  },
+  ticketSubject: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  ticketMeta: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    marginTop: 7,
+    textTransform: 'capitalize',
+  },
   emptyCard: {
     borderRadius: 8,
     borderWidth: 1,
@@ -185,6 +295,16 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: 'center',
     marginTop: 7,
+  },
+  retryButton: {
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 16,
+  },
+  retryText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
   },
   footer: {
     borderTopWidth: 1,

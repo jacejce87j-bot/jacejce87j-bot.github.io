@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { useAppEnvironment } from '@/lib/environment-context';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -23,6 +24,7 @@ export default function SignInScreen() {
   const colors = useColors();
   const router = useRouter();
   const { isSignedIn } = useAuth();
+  const { environment, switchEnvironment } = useAppEnvironment();
   const { signIn, errors, fetchStatus } = useSignIn();
   const { startSSOFlow } = useSSO();
   const [email, setEmail] = useState('');
@@ -74,6 +76,12 @@ export default function SignInScreen() {
     }
   }, [router, startSSOFlow]);
 
+  const selectEnvironment = async (nextEnvironment: 'development' | 'production') => {
+    if (nextEnvironment === environment) return;
+    setMessage('');
+    await switchEnvironment(nextEnvironment);
+  };
+
   if (isSignedIn) return <Redirect href="/(tabs)" />;
 
   return (
@@ -91,6 +99,33 @@ export default function SignInScreen() {
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             Sign in to work assigned tickets wherever you are.
           </Text>
+          <Text style={[styles.environmentLabel, { color: colors.foreground }]}>
+            Connection
+          </Text>
+          <View style={[styles.environmentPicker, { backgroundColor: colors.secondary }]}>
+            {(['production', 'development'] as const).map((option) => {
+              const selected = environment === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => void selectEnvironment(option)}
+                  style={[
+                    styles.environmentOption,
+                    selected && { backgroundColor: colors.card },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.environmentOptionText,
+                      { color: selected ? colors.primary : colors.mutedForeground },
+                    ]}
+                  >
+                    {option === 'production' ? 'Production' : 'Development'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           <View style={styles.form}>
             <Text style={[styles.label, { color: colors.foreground }]}>Work email</Text>
@@ -157,6 +192,10 @@ const styles = StyleSheet.create({
   eyebrow: { fontFamily: 'Inter_700Bold', fontSize: 12, letterSpacing: 2.2 },
   title: { fontFamily: 'Inter_700Bold', fontSize: 34, letterSpacing: -1, marginTop: 10 },
   subtitle: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24, marginTop: 10, maxWidth: 330 },
+  environmentLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 13, marginTop: 22 },
+  environmentPicker: { borderRadius: 10, flexDirection: 'row', marginTop: 8, padding: 4 },
+  environmentOption: { borderRadius: 7, flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center' },
+  environmentOptionText: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   form: { gap: 10, marginTop: 34 },
   label: { fontFamily: 'Inter_600SemiBold', fontSize: 13, marginTop: 8 },
   input: { borderRadius: 10, borderWidth: 1, fontFamily: 'Inter_400Regular', fontSize: 16, minHeight: 52, paddingHorizontal: 15 },

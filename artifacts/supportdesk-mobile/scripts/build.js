@@ -142,12 +142,30 @@ async function startMetro(expoPublicDomain, apiDomain, expoPublicReplId) {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_API_DOMAIN: apiDomain,
+    EXPO_PUBLIC_DEV_API_DOMAIN:
+      process.env.EXPO_PUBLIC_DEV_API_DOMAIN ||
+      process.env.REPLIT_DEV_DOMAIN ||
+      apiDomain,
+    EXPO_PUBLIC_PROD_API_DOMAIN:
+      process.env.EXPO_PUBLIC_PROD_API_DOMAIN ||
+      process.env.EXPO_PUBLIC_API_DOMAIN ||
+      apiDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
-    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY:
-      process.env.CLERK_PUBLISHABLE_KEY || '',
-    EXPO_PUBLIC_CLERK_PROXY_URL: process.env.CLERK_PROXY_URL
-      ? `https://${expoPublicDomain}${process.env.CLERK_PROXY_URL}`
-      : '',
+    EXPO_PUBLIC_DEV_CLERK_PUBLISHABLE_KEY:
+      process.env.EXPO_PUBLIC_DEV_CLERK_PUBLISHABLE_KEY ||
+      process.env.CLERK_PUBLISHABLE_KEY ||
+      '',
+    EXPO_PUBLIC_PROD_CLERK_PUBLISHABLE_KEY:
+      process.env.EXPO_PUBLIC_PROD_CLERK_PUBLISHABLE_KEY ||
+      process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+      process.env.MOBILE_PRODUCTION_CLERK_PUBLISHABLE_KEY ||
+      process.env.CLERK_PUBLISHABLE_KEY ||
+      '',
+    EXPO_PUBLIC_PROD_CLERK_PROXY_URL:
+      process.env.EXPO_PUBLIC_PROD_CLERK_PROXY_URL ||
+      (process.env.CLERK_PROXY_URL
+        ? `https://${expoPublicDomain}${process.env.CLERK_PROXY_URL}`
+        : ''),
   };
 
   if (expoPublicReplId) {

@@ -14,3 +14,9 @@ Internal Expo Go clients also need the Production Clerk publishable key and Cler
 **Why:** An Expo Go bundle can retain a Development Clerk session while calling the correct Production API, producing valid-looking local profile state but `401 Authentication required` on every protected Production endpoint.
 
 **How to apply:** Keep the Production key public-only and outside managed secret replacement. Inject the proxy and API host into the internal workflow, restart Metro, force-reload Expo Go, and sign in again after the one-time cache migration.
+
+The internal mobile login treats Development and Production as explicit selectable bundles. Each selection switches the Clerk key/proxy, API domain, and token-cache namespace together; Production remains the default.
+
+**Why:** A single remembered environment marker cannot prevent a valid session for one Clerk tenant from being reused while calling another tenant's API.
+
+**How to apply:** Keep both public configuration sets available to the Expo bundle, clear old auth/query state before remounting Clerk, and keep this selector internal to the mobile app.

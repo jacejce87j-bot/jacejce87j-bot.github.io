@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/supportdesk-agent-dev/"
+title = "SupportDesk Agent Dev"
+description = "A development-only Expo companion for Orion Tracking support agents to securely view and work assigned SupportDesk tickets during development."
+version = "1.0.0"
+id = "artifacts/supportdesk-agent-dev"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/supportdesk-agent-dev/" ]
+localPort = 18209
+
+[services.development]
+run = "pnpm --filter @workspace/supportdesk-agent-dev run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/supportdesk-agent-dev", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/supportdesk-agent-dev", "run", "serve" ]
+
+[services.env]
+PORT = "18209"
+BASE_PATH = "/supportdesk-agent-dev/"

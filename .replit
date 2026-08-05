@@ -34,8 +34,3 @@ externalPort = 3000
 [nix]
 channel = "stable-25_05"
 packages = ["freetype", "gumbo", "harfbuzz", "jbig2dec", "libjpeg_turbo", "mupdf", "openjpeg", "swig", "xcbuild"]
-
-[userenv]
-EXPO_PUBLIC_API_DOMAIN = "zendesk-salesforce--jacejce87j.replit.app"
-EXPO_PUBLIC_CLERK_PROXY_URL = "https://zendesk-salesforce--jacejce87j.replit.app/api/__clerk"
-EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuemVuZGVzay1zYWxlc2ZvcmNlLS1qYWNlamNlODdqLnJlcGxpdC5hcHAk"

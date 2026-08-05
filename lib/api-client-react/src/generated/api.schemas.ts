@@ -237,100 +237,6 @@ export interface TicketInput {
   attachments?: TicketAttachment[];
 }
 
-export type MobileTicketInputPriority = typeof MobileTicketInputPriority[keyof typeof MobileTicketInputPriority];
-
-
-export const MobileTicketInputPriority = {
-  low: 'low',
-  normal: 'normal',
-  high: 'high',
-  urgent: 'urgent',
-} as const;
-
-export type MobileTicketInputType = typeof MobileTicketInputType[keyof typeof MobileTicketInputType];
-
-
-export const MobileTicketInputType = {
-  question: 'question',
-  incident: 'incident',
-  problem: 'problem',
-  task: 'task',
-} as const;
-
-export type MobileTicketInputChannel = typeof MobileTicketInputChannel[keyof typeof MobileTicketInputChannel];
-
-
-export const MobileTicketInputChannel = {
-  email: 'email',
-  chat: 'chat',
-  phone: 'phone',
-  web: 'web',
-  api: 'api',
-} as const;
-
-export interface MobileTicketInput {
-  /** @minLength 1 */
-  subject: string;
-  description?: string;
-  priority?: MobileTicketInputPriority;
-  type?: MobileTicketInputType;
-  channel?: MobileTicketInputChannel;
-  /** Agent to assign the ticket to. Defaults to the signed-in agent. */
-  assigneeId?: number;
-  attachments?: TicketAttachment[];
-}
-
-export type MobileTicketUpdateStatus = typeof MobileTicketUpdateStatus[keyof typeof MobileTicketUpdateStatus];
-
-
-export const MobileTicketUpdateStatus = {
-  open: 'open',
-  pending: 'pending',
-  on_hold: 'on_hold',
-  solved: 'solved',
-  closed: 'closed',
-} as const;
-
-export type MobileTicketUpdatePriority = typeof MobileTicketUpdatePriority[keyof typeof MobileTicketUpdatePriority];
-
-
-export const MobileTicketUpdatePriority = {
-  low: 'low',
-  normal: 'normal',
-  high: 'high',
-  urgent: 'urgent',
-} as const;
-
-export type MobileTicketUpdateType = typeof MobileTicketUpdateType[keyof typeof MobileTicketUpdateType];
-
-
-export const MobileTicketUpdateType = {
-  question: 'question',
-  incident: 'incident',
-  problem: 'problem',
-  task: 'task',
-} as const;
-
-export type MobileTicketUpdateChannel = typeof MobileTicketUpdateChannel[keyof typeof MobileTicketUpdateChannel];
-
-
-export const MobileTicketUpdateChannel = {
-  email: 'email',
-  chat: 'chat',
-  phone: 'phone',
-  web: 'web',
-  api: 'api',
-} as const;
-
-export interface MobileTicketUpdate {
-  description?: string;
-  status?: MobileTicketUpdateStatus;
-  priority?: MobileTicketUpdatePriority;
-  type?: MobileTicketUpdateType;
-  channel?: MobileTicketUpdateChannel;
-  attachments?: TicketAttachment[];
-}
-
 export type TicketUpdateStatus = typeof TicketUpdateStatus[keyof typeof TicketUpdateStatus];
 
 
@@ -781,23 +687,6 @@ export type ListTicketsSortDir = typeof ListTicketsSortDir[keyof typeof ListTick
 export const ListTicketsSortDir = {
   asc: 'asc',
   desc: 'desc',
-} as const;
-
-export type ListMobileTicketsParams = {
-status?: ListMobileTicketsStatus;
-page?: number;
-limit?: number;
-};
-
-export type ListMobileTicketsStatus = typeof ListMobileTicketsStatus[keyof typeof ListMobileTicketsStatus];
-
-
-export const ListMobileTicketsStatus = {
-  open: 'open',
-  pending: 'pending',
-  on_hold: 'on_hold',
-  solved: 'solved',
-  closed: 'closed',
 } as const;
 
 export type ListContactsParams = {

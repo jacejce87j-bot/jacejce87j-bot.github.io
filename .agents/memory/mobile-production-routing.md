@@ -15,8 +15,8 @@ Internal Expo Go clients also need the Production Clerk publishable key and Cler
 
 **How to apply:** Keep the Production key public-only and outside managed secret replacement. Inject the proxy and API host into the internal workflow, restart Metro, force-reload Expo Go, and sign in again after the one-time cache migration.
 
-The internal mobile login treats Development and Production as explicit selectable bundles. Each selection switches the Clerk key/proxy, API domain, and token-cache namespace together; Production remains the default.
+The internal mobile app is Production-only. The Expo bundle must use the Production Clerk key/proxy, Production API domain, and a Production-scoped token cache; no Development selector or credentials belong in the app.
 
-**Why:** A single remembered environment marker cannot prevent a valid session for one Clerk tenant from being reused while calling another tenant's API.
+**Why:** The app is an internal agent client for the published SupportDesk system, and keeping a second Clerk tenant available created redirect and stale-session confusion without providing value.
 
-**How to apply:** Keep both public configuration sets available to the Expo bundle, clear old auth/query state before remounting Clerk, and keep this selector internal to the mobile app.
+**How to apply:** Keep the Replit execution context wired to the Production values so Expo Go can start, clear legacy Development/plain token keys on launch, and force-reload Expo Go after bundle changes.

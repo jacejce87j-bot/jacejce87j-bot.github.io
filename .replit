@@ -35,14 +35,6 @@ externalPort = 3000
 channel = "stable-25_05"
 
 [userenv]
-
-[userenv.production]
-EXPO_PUBLIC_API_DOMAIN = "zendesk-salesforce--jacejce87j.replit.app"
-
-[userenv.development]
 EXPO_PUBLIC_API_DOMAIN = "zendesk-salesforce--jacejce87j.replit.app"
 EXPO_PUBLIC_CLERK_PROXY_URL = "https://zendesk-salesforce--jacejce87j.replit.app/api/__clerk"
 EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuemVuZGVzay1zYWxlc2ZvcmNlLS1qYWNlamNlODdqLnJlcGxpdC5hcHAk"
-EXPO_PUBLIC_PROD_API_DOMAIN = "zendesk-salesforce--jacejce87j.replit.app"
-EXPO_PUBLIC_PROD_CLERK_PROXY_URL = "https://zendesk-salesforce--jacejce87j.replit.app/api/__clerk"
-EXPO_PUBLIC_PROD_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsuemVuZGVzay1zYWxlc2ZvcmNlLS1qYWNlamNlODdqLnJlcGxpdC5hcHAk"

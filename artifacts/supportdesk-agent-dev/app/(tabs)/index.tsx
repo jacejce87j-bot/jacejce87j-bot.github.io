@@ -1,16 +1,37 @@
-import { useClerk, useUser } from '@clerk/expo';
+import { useAuth, useClerk, useUser } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
-import { getListTicketsQueryKey, useListTickets } from '@workspace/api-client-react';
+import {
+  getListTicketsQueryKey,
+  getListAgentsQueryKey,
+  useListAgents,
+  useListTickets,
+  useUpdateTicket,
+  type TicketAttachment,
+} from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { formatAttachmentSize, openTicketAttachment, pickTicketFile, uploadTicketFile } from '@/components/ticketAttachments';
 
 export default function AgentHomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
+  const { getToken } = useAuth();
   const { signOut } = useClerk();
+  const queryClient = useQueryClient();
+  const [activeAgentPicker, setActiveAgentPicker] = useState<number | null>(null);
+  const [uploadingTicketId, setUploadingTicketId] = useState<number | null>(null);
+  const [openingAttachmentKey, setOpeningAttachmentKey] = useState<string | null>(null);
+  const agentsQuery = useListAgents({
+    query: {
+      queryKey: getListAgentsQueryKey(),
+      enabled: Boolean(user),
+    },
+  });
   const ticketsQuery = useListTickets(
     { limit: 10, sortBy: 'updatedAt', sortDir: 'desc' },
     {
@@ -21,6 +42,53 @@ export default function AgentHomeScreen() {
     },
   );
   const firstName = user?.firstName || user?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Agent';
+  const updateTicket = useUpdateTicket();
+  const agents = agentsQuery.data ?? [];
+  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ''}`;
+
+  const refreshTickets = async () => {
+    await queryClient.invalidateQueries({ queryKey: getListTicketsQueryKey() });
+  };
+
+  const handleAddAttachment = async (ticketId: number, currentAttachments: TicketAttachment[]) => {
+    const file = await pickTicketFile();
+    if (!file) return;
+    setUploadingTicketId(ticketId);
+    try {
+      const attachment = await uploadTicketFile(file);
+      await updateTicket.mutateAsync({
+        id: ticketId,
+        data: { attachments: [...currentAttachments, attachment] },
+      });
+      await refreshTickets();
+    } catch (requestError) {
+      Alert.alert('Attachment failed', requestError instanceof Error ? requestError.message : 'The attachment could not be added.');
+    } finally {
+      setUploadingTicketId(null);
+    }
+  };
+
+  const handleReassign = async (ticketId: number, assigneeId: number | null) => {
+    try {
+      await updateTicket.mutateAsync({ id: ticketId, data: { assigneeId } });
+      setActiveAgentPicker(null);
+      await refreshTickets();
+    } catch (requestError) {
+      Alert.alert('Assignment failed', requestError instanceof Error ? requestError.message : 'The ticket could not be reassigned.');
+    }
+  };
+
+  const handleOpenAttachment = async (attachment: TicketAttachment) => {
+    const key = `${attachment.objectPath}-${attachment.uploadedAt}`;
+    setOpeningAttachmentKey(key);
+    try {
+      await openTicketAttachment(attachment, () => getToken(), baseUrl);
+    } catch (requestError) {
+      Alert.alert('Attachment unavailable', requestError instanceof Error ? requestError.message : 'The attachment could not be opened.');
+    } finally {
+      setOpeningAttachmentKey(null);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -99,6 +167,68 @@ export default function AgentHomeScreen() {
                 <Text style={[styles.ticketMeta, { color: colors.mutedForeground }]}>
                   {ticket.priority} priority · {ticket.type}
                 </Text>
+                <View style={styles.ticketDetailRow}>
+                  <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>Assigned to</Text>
+                  <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>{ticket.assignee?.name ?? 'Unassigned'}</Text>
+                </View>
+                {ticket.attachments?.length ? (
+                  <View style={styles.attachments}>
+                    {ticket.attachments.map((attachment) => {
+                      const key = `${attachment.objectPath}-${attachment.uploadedAt}`;
+                      return (
+                        <Pressable
+                          key={key}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open attachment ${attachment.name}`}
+                          onPress={() => void handleOpenAttachment(attachment)}
+                          style={[styles.attachmentRow, { backgroundColor: colors.background, borderColor: colors.border }]}
+                        >
+                          <Feather name="file-text" size={15} color={colors.primary} />
+                          <View style={styles.attachmentInfo}>
+                            <Text style={[styles.attachmentName, { color: colors.foreground }]} numberOfLines={1}>{attachment.name}</Text>
+                            <Text style={[styles.attachmentMeta, { color: colors.mutedForeground }]}>
+                              {formatAttachmentSize(attachment.size)} · {attachment.contentType}
+                            </Text>
+                          </View>
+                          {openingAttachmentKey === key ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.mutedForeground} />}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+                <View style={styles.ticketActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Attach a file to ticket ${ticket.id}`}
+                    disabled={uploadingTicketId === ticket.id}
+                    onPress={() => void handleAddAttachment(ticket.id, ticket.attachments ?? [])}
+                    style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, uploadingTicketId === ticket.id && styles.disabled, pressed && styles.pressed]}
+                  >
+                    <Feather name="paperclip" size={14} color={colors.primary} />
+                    <Text style={[styles.actionText, { color: colors.primary }]}>{uploadingTicketId === ticket.id ? 'Uploading…' : 'Attach file'}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Reassign ticket ${ticket.id}`}
+                    onPress={() => setActiveAgentPicker(activeAgentPicker === ticket.id ? null : ticket.id)}
+                    style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, pressed && styles.pressed]}
+                  >
+                    <Feather name="user" size={14} color={colors.primary} />
+                    <Text style={[styles.actionText, { color: colors.primary }]}>Reassign</Text>
+                  </Pressable>
+                </View>
+                {activeAgentPicker === ticket.id ? (
+                  <View style={[styles.agentPicker, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Pressable onPress={() => void handleReassign(ticket.id, null)} style={styles.agentOption}>
+                      <Text style={[styles.agentOptionText, { color: ticket.assigneeId == null ? colors.primary : colors.mutedForeground }]}>Unassigned</Text>
+                    </Pressable>
+                    {agents.map((agent) => (
+                      <Pressable key={agent.id} onPress={() => void handleReassign(ticket.id, agent.id)} style={styles.agentOption}>
+                        <Text style={[styles.agentOptionText, { color: ticket.assigneeId === agent.id ? colors.primary : colors.mutedForeground }]}>{agent.name}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             ))}
           </View>
@@ -315,5 +445,80 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  ticketDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 11,
+  },
+  ticketDetailLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+  },
+  ticketDetailValue: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  attachments: {
+    gap: 7,
+    marginTop: 11,
+  },
+  attachmentRow: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  attachmentInfo: {
+    flex: 1,
+  },
+  attachmentName: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  attachmentMeta: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  ticketActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  actionButton: {
+    minHeight: 34,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  agentPicker: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+  agentOption: {
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+  },
+  agentOptionText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });

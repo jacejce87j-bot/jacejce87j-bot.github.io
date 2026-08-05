@@ -30,15 +30,11 @@ export function GoogleAuthButton({ onError }: Props) {
     onError('');
 
     try {
-      const redirectUrl =
-        Platform.OS === 'web'
-          ? AuthSession.makeRedirectUri({
-              path: 'oauth',
-            })
-          : AuthSession.makeRedirectUri({
-              scheme: 'supportdesk-agent-dev',
-              path: 'oauth',
-            });
+      // Keep this identical to Clerk Expo's documented default. Clerk only
+      // includes rotating_token_nonce for an allowed SSO callback URL.
+      const redirectUrl = AuthSession.makeRedirectUri({
+        path: 'sso-callback',
+      });
       const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
         strategy: 'oauth_google',
         redirectUrl,
@@ -56,7 +52,13 @@ export function GoogleAuthButton({ onError }: Props) {
 
       await setActive({
         session: createdSessionId,
-        navigate: () => router.replace('/(tabs)'),
+        navigate: async ({ session }) => {
+          if (session?.currentTask) {
+            onError('Google sign-in needs one more account step before continuing.');
+            return;
+          }
+          router.replace('/(tabs)');
+        },
       });
     } catch (error) {
       const message =

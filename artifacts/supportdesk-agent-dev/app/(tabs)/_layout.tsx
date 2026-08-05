@@ -17,7 +17,11 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'house', selected: 'house.fill' }} />
-        <Label>Home</Label>
+        <Label>My queue</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="create-ticket">
+        <Icon sf={{ default: 'plus.circle', selected: 'plus.circle.fill' }} />
+        <Label>Create ticket</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -77,6 +81,14 @@ function ClassicTabLayout() {
             ) : (
               <Feather name="home" size={22} color={color} />
             ),
+        }}
+      />
+      <Tabs.Screen
+        name="create-ticket"
+        options={{
+          title: 'Create ticket',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <Feather name="plus-circle" size={22} color={color} />,
         }}
       />
     </Tabs>

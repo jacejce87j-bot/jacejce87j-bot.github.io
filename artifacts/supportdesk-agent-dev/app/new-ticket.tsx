@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -113,12 +114,15 @@ export default function NewTicketScreen() {
   return (
     <KeyboardAwareScrollViewCompat
       style={{ backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingTop: insets.top + 18, paddingBottom: insets.bottom + 28 }}
+      contentContainerStyle={{
+        paddingTop: insets.top + 18,
+        paddingBottom: insets.bottom + (Platform.OS === 'web' ? 102 : 84),
+      }}
       bottomOffset={30}
       keyboardDismissMode="interactive"
     >
       <View style={styles.container}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={() => router.replace('/(tabs)')} style={styles.backButton}>
           <Text style={[styles.backText, { color: colors.primary }]}>‹ Back to queue</Text>
         </Pressable>
         <Text style={[styles.eyebrow, { color: colors.primary }]}>DEVELOPMENT WORKSPACE</Text>

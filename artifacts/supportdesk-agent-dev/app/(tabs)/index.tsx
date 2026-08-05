@@ -1,7 +1,7 @@
 import { useClerk, useUser } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { getListTicketsQueryKey, useListTickets } from '@workspace/api-client-react';
@@ -26,7 +26,13 @@ export default function AgentHomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + 24,
+            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 102 : 84),
+          },
+        ]}
         contentInsetAdjustmentBehavior="never"
       >
         <View style={styles.greetingRow}>
@@ -56,16 +62,6 @@ export default function AgentHomeScreen() {
           </View>
           <View style={[styles.statusDot, { backgroundColor: '#2FA36B' }]} />
         </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Create a new ticket"
-          onPress={() => router.push('/new-ticket')}
-          style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
-        >
-          <Feather name="plus" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create ticket</Text>
-        </Pressable>
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My queue</Text>
@@ -117,20 +113,20 @@ export default function AgentHomeScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 18, borderTopColor: colors.border }]}>
-        <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Signed in as {user?.primaryEmailAddress?.emailAddress || 'development user'}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Sign out"
-          onPress={() => void signOut(() => router.replace('/'))}
-          style={({ pressed }) => [styles.signOutButton, { backgroundColor: colors.secondary }, pressed && styles.pressed]}
-        >
-          <Feather name="log-out" size={16} color={colors.secondaryForeground} />
-          <Text style={[styles.signOutText, { color: colors.secondaryForeground }]}>Sign out</Text>
-        </Pressable>
-      </View>
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Signed in as {user?.primaryEmailAddress?.emailAddress || 'development user'}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            onPress={() => void signOut(() => router.replace('/'))}
+            style={({ pressed }) => [styles.signOutButton, { backgroundColor: colors.secondary }, pressed && styles.pressed]}
+          >
+            <Feather name="log-out" size={16} color={colors.secondaryForeground} />
+            <Text style={[styles.signOutText, { color: colors.secondaryForeground }]}>Sign out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -140,7 +136,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 22,
     gap: 22,
   },
@@ -224,18 +220,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
   },
-  createButton: {
-    minHeight: 48,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  createButtonText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-  },
   ticketList: {
     gap: 10,
   },
@@ -308,9 +292,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     borderTopWidth: 1,
-    paddingHorizontal: 22,
     paddingTop: 14,
     gap: 12,
+    marginTop: 4,
   },
   footerText: {
     fontFamily: 'Inter_400Regular',

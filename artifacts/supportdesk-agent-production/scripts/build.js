@@ -131,6 +131,11 @@ async function startMetro(productionApiDomain) {
   const env = {
     ...process.env,
     EXPO_PUBLIC_PRODUCTION_API_DOMAIN: productionApiDomain,
+    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY:
+      process.env.CLERK_PUBLISHABLE_KEY || '',
+    EXPO_PUBLIC_CLERK_PROXY_URL: process.env.CLERK_PROXY_URL
+      ? `https://${getProductionAppDomain()}${process.env.CLERK_PROXY_URL}`
+      : '',
   };
 
   metroProcess = spawn(

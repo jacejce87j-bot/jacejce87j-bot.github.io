@@ -20,3 +20,7 @@ PORT = "20445"
 BASE_PATH = "/supportdesk-agent-production/"
 PRODUCTION_APP_DOMAIN = "zendesk-salesforce--jacejce87.replit.app"
 PRODUCTION_API_DOMAIN = "zendesk-salesforce--jacejce87.replit.app"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/supportdesk-agent-production", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/supportdesk-agent-production", "run", "serve" ]

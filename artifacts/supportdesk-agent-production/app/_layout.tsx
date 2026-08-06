@@ -8,6 +8,7 @@ import { ProductionApiProvider } from '@/components/ProductionApiProvider';
 
 const queryClient = new QueryClient();
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
+const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
 if (!publishableKey) {
   throw new Error(
@@ -29,7 +30,11 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <ClerkProvider
+        publishableKey={publishableKey}
+        tokenCache={tokenCache}
+        proxyUrl={clerkProxyUrl}
+      >
         <QueryClientProvider client={queryClient}>
           <ProductionApiProvider>
             <RootLayoutNav />

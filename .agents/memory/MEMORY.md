@@ -12,4 +12,4 @@
 - [Form component context](form-component-context.md) — shadcn FormLabel/FormMessage require FormField/FormItem context; use a native label for standalone controls
 - [Production Expo isolation](production-expo-isolation.md) — production mobile clones must require an explicit HTTPS API origin and use a dedicated Metro build port
 - [Native API cache handling](native-api-cache.md) — native GET requests must bypass conditional caching because a 304 has no body and can look like valid empty data
-- [Expo Go workflow identity](expo-go-workflow-identity.md) — separate Expo workflows need distinct tunnel/packager URLs; localhost or shared proxy URLs can load the wrong app
+- [Expo Go workflow identity](expo-go-workflow-identity.md) — separate workflows need distinct URLs, and Expo Go uses Development Clerk keys rather than published Production auth

@@ -20,7 +20,11 @@ export default function ContactList() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+ 
   const [form, setForm] = useState({ name: "", email: "", phone: "", organizationId: "none", role: "end_user", notes: "" });
+  const [userForm, setUserForm] = useState({ email: "", password: "", fullName: "", role: "end_user" });
+  const [creatingUser, setCreatingUser] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: organizations } = useListOrganizations({ limit: 100 });
@@ -54,9 +58,14 @@ export default function ContactList() {
             <h2 className="text-3xl font-bold tracking-tight">Contacts</h2>
             <p className="text-muted-foreground">Manage your customers and end-users.</p>
           </div>
-          <Button onClick={() => setOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Add Contact
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setUserOpen(true)}>
+              Create User
+            </Button>
+            <Button onClick={() => setOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Add Contact
+            </Button>
+          </div>
         </div>
 
         <Card className="p-4">
@@ -180,6 +189,45 @@ export default function ContactList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={userOpen} onOpenChange={setUserOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create user</DialogTitle>
+            <DialogDescription>Create a new application user (email + password).</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2"><Label htmlFor="user-fullname">Full name</Label><Input id="user-fullname" value={userForm.fullName} onChange={(e) => setUserForm({ ...userForm, fullName: e.target.value })} placeholder="Alex Morgan" /></div>
+            <div className="grid gap-2"><Label htmlFor="user-email">Email *</Label><Input id="user-email" type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} placeholder="alex@example.com" /></div>
+            <div className="grid gap-2"><Label htmlFor="user-password">Password *</Label><Input id="user-password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder="Choose a secure password" /></div>
+            <div className="grid gap-2"><Label>Role</Label><Select value={userForm.role} onValueChange={(value) => setUserForm({ ...userForm, role: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="end_user">End user</SelectItem><SelectItem value="agent">Agent</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent></Select></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserOpen(false)}>Cancel</Button>
+            <Button disabled={creatingUser || !userForm.email.trim() || !userForm.password.trim()} onClick={async () => {
+              try {
+                setCreatingUser(true);
+                const res = await fetch(`/api/auth/register`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: userForm.email.trim(), password: userForm.password, fullName: userForm.fullName.trim() || undefined, role: userForm.role })
+                });
+                if (!res.ok) {
+                  const body = await res.json().catch(() => ({}));
+                  throw new Error(body?.message || 'Failed to create user');
+                }
+                setUserOpen(false);
+                setUserForm({ email: '', password: '', fullName: '', role: 'end_user' });
+                toast({ title: 'User created' });
+              } catch (err: any) {
+                toast({ title: 'Could not create user', description: err?.message || 'Check input and try again.', variant: 'destructive' });
+              } finally {
+                setCreatingUser(false);
+              }
+            }}>{creatingUser ? 'Creating...' : 'Create user'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
     </AppLayout>
   );
 }

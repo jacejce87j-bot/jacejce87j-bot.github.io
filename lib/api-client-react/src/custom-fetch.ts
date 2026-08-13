@@ -1,350 +1,123 @@
-export type CustomFetchOptions = RequestInit & {
-  responseType?: "json" | "text" | "blob" | "auto";
-};
-
-export type ErrorType<T = unknown> = ApiError<T>;
-
-export type BodyType<T> = T;
-
-const NO_BODY_STATUS = new Set([204, 205, 304]);
-const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
-
-type NativeApiTransport = {
-  baseUrl: string;
-  getToken: () => Promise<string | null>;
-};
-
-let nativeApiTransport: NativeApiTransport | null = null;
-
 /**
- * Configures the generated client for a native Expo app.
- *
- * Browser clients intentionally remain same-origin and cookie-based. Expo
- * needs an absolute API URL and an explicit Clerk bearer token.
+ * Custom fetch wrapper for generated API hooks.
+ * Automatically injects internal JWT tokens and resolves base URLs for Web and Mobile builds.
  */
-export function configureNativeApiTransport(
-  transport: NativeApiTransport,
-): void {
-  nativeApiTransport = {
-    ...transport,
-    baseUrl: transport.baseUrl.replace(/\/+$/, ""),
-  };
-}
+export type ErrorType<T> = Error | T;
+export type BodyType<T = unknown> = T;
 
-export function clearNativeApiTransport(): void {
-  nativeApiTransport = null;
-}
-
-function isRequest(input: RequestInfo | URL): input is Request {
-  return typeof Request !== "undefined" && input instanceof Request;
-}
-
-function resolveMethod(input: RequestInfo | URL, explicitMethod?: string): string {
-  if (explicitMethod) return explicitMethod.toUpperCase();
-  if (isRequest(input)) return input.method.toUpperCase();
-  return "GET";
-}
-
-function isUrl(input: RequestInfo | URL): input is URL {
-  return typeof URL !== "undefined" && input instanceof URL;
-}
-
-function resolveUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
-  if (isUrl(input)) return input.toString();
-  return input.url;
-}
-
-function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
-  const headers = new Headers();
-
-  for (const source of sources) {
-    if (!source) continue;
-    new Headers(source).forEach((value, key) => {
-      headers.set(key, value);
-    });
-  }
-
-  return headers;
-}
-
-function getMediaType(headers: Headers): string | null {
-  const value = headers.get("content-type");
-  return value ? value.split(";", 1)[0].trim().toLowerCase() : null;
-}
-
-function isJsonMediaType(mediaType: string | null): boolean {
-  return mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
-}
-
-function isTextMediaType(mediaType: string | null): boolean {
-  return Boolean(
-    mediaType &&
-      (mediaType.startsWith("text/") ||
-        mediaType === "application/xml" ||
-        mediaType === "text/xml" ||
-        mediaType.endsWith("+xml") ||
-        mediaType === "application/x-www-form-urlencoded"),
-  );
-}
-
-function hasNoBody(response: Response, method: string): boolean {
-  if (method === "HEAD") return true;
-  if (NO_BODY_STATUS.has(response.status)) return true;
-  if (response.headers.get("content-length") === "0") return true;
-  if (response.body === null) return true;
-  return false;
-}
-
-function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-}
-
-function looksLikeJson(text: string): boolean {
-  const trimmed = text.trimStart();
-  return trimmed.startsWith("{") || trimmed.startsWith("[");
-}
-
-function getStringField(value: unknown, key: string): string | undefined {
-  if (!value || typeof value !== "object") return undefined;
-
-  const candidate = (value as Record<string, unknown>)[key];
-  if (typeof candidate !== "string") return undefined;
-
-  const trimmed = candidate.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
-
-function truncate(text: string, maxLength = 300): string {
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
-}
-
-function buildErrorMessage(response: Response, data: unknown): string {
-  const prefix = `HTTP ${response.status} ${response.statusText}`;
-
-  if (typeof data === "string") {
-    const text = data.trim();
-    return text ? `${prefix}: ${truncate(text)}` : prefix;
-  }
-
-  const title = getStringField(data, "title");
-  const detail = getStringField(data, "detail");
-  const message =
-    getStringField(data, "message") ??
-    getStringField(data, "error_description") ??
-    getStringField(data, "error");
-
-  if (title && detail) return `${prefix}: ${title} — ${detail}`;
-  if (detail) return `${prefix}: ${detail}`;
-  if (message) return `${prefix}: ${message}`;
-  if (title) return `${prefix}: ${title}`;
-
-  return prefix;
-}
-
-export class ApiError<T = unknown> extends Error {
-  readonly name = "ApiError";
-  readonly status: number;
-  readonly statusText: string;
-  readonly data: T | null;
-  readonly headers: Headers;
-  readonly response: Response;
-  readonly method: string;
-  readonly url: string;
-
-  constructor(
-    response: Response,
-    data: T | null,
-    requestInfo: { method: string; url: string },
-  ) {
-    super(buildErrorMessage(response, data));
-    Object.setPrototypeOf(this, new.target.prototype);
-
-    this.status = response.status;
-    this.statusText = response.statusText;
-    this.data = data;
-    this.headers = response.headers;
-    this.response = response;
-    this.method = requestInfo.method;
-    this.url = response.url || requestInfo.url;
-  }
-}
-
-export class ResponseParseError extends Error {
-  readonly name = "ResponseParseError";
-  readonly status: number;
-  readonly statusText: string;
-  readonly headers: Headers;
-  readonly response: Response;
-  readonly method: string;
-  readonly url: string;
-  readonly rawBody: string;
-  readonly cause: unknown;
-
-  constructor(
-    response: Response,
-    rawBody: string,
-    cause: unknown,
-    requestInfo: { method: string; url: string },
-  ) {
-    super(
-      `Failed to parse response from ${requestInfo.method} ${response.url || requestInfo.url} ` +
-        `(${response.status} ${response.statusText}) as JSON`,
-    );
-    Object.setPrototypeOf(this, new.target.prototype);
-
-    this.status = response.status;
-    this.statusText = response.statusText;
-    this.headers = response.headers;
-    this.response = response;
-    this.method = requestInfo.method;
-    this.url = response.url || requestInfo.url;
-    this.rawBody = rawBody;
-    this.cause = cause;
-  }
-}
-
-async function parseJsonBody(
-  response: Response,
-  requestInfo: { method: string; url: string },
-): Promise<unknown> {
-  const raw = await response.text();
-  const normalized = stripBom(raw);
-
-  if (normalized.trim() === "") {
-    return null;
+export const configureNativeApiTransport = (baseUrl: string, token?: string) => {
+  if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
+    try {
+      window.localStorage.setItem("api_base_url", baseUrl);
+      if (token) window.localStorage.setItem("auth_token", token);
+    } catch (e) {
+      // ignore
+    }
   }
 
   try {
-    return JSON.parse(normalized);
-  } catch (cause) {
-    throw new ResponseParseError(response, raw, cause, requestInfo);
+    (globalThis as any).__API_BASE_URL__ = baseUrl;
+    if (token) (globalThis as any).__AUTH_TOKEN__ = token;
+  } catch (e) {
+    // ignore
   }
-}
+};
 
-async function parseErrorBody(response: Response, method: string): Promise<unknown> {
-  if (hasNoBody(response, method)) {
-    return null;
+export const clearNativeApiTransport = () => {
+  if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
+    window.localStorage.removeItem("api_base_url");
+    window.localStorage.removeItem("auth_token");
   }
-
-  const mediaType = getMediaType(response.headers);
-
-  // Fall back to text when blob() is unavailable (e.g. some React Native builds).
-  if (mediaType && !isJsonMediaType(mediaType) && !isTextMediaType(mediaType)) {
-    return typeof response.blob === "function" ? response.blob() : response.text();
+  try {
+    if ((globalThis as any).__API_BASE_URL__) delete (globalThis as any).__API_BASE_URL__;
+    if ((globalThis as any).__AUTH_TOKEN__) delete (globalThis as any).__AUTH_TOKEN__;
+  } catch (e) {
+    // ignore
   }
+};
 
-  const raw = await response.text();
-  const normalized = stripBom(raw);
-  const trimmed = normalized.trim();
+export const customFetch = async <T>(
+  url: string,
+  options: RequestInit = {}
+): Promise<T> => {
+  console.log("[customFetch] Called with URL:", url);
 
-  if (trimmed === "") {
-    return null;
-  }
+  let fullUrl = url;
 
-  if (isJsonMediaType(mediaType) || looksLikeJson(normalized)) {
+  if (!url.startsWith("http")) {
+    const storedBaseUrl =
+      (globalThis as any).__API_BASE_URL__ ||
+      (typeof window !== "undefined" && typeof window.localStorage !== "undefined" && window.localStorage.getItem("api_base_url")) ||
+      "";
+
+    let viteApiUrl: string | undefined;
     try {
-      return JSON.parse(normalized);
-    } catch {
-      return raw;
-    }
-  }
-
-  return raw;
-}
-
-function inferResponseType(response: Response): "json" | "text" | "blob" {
-  const mediaType = getMediaType(response.headers);
-
-  if (isJsonMediaType(mediaType)) return "json";
-  if (isTextMediaType(mediaType) || mediaType == null) return "text";
-  return "blob";
-}
-
-async function parseSuccessBody(
-  response: Response,
-  responseType: "json" | "text" | "blob" | "auto",
-  requestInfo: { method: string; url: string },
-): Promise<unknown> {
-  if (hasNoBody(response, requestInfo.method)) {
-    return null;
-  }
-
-  const effectiveType =
-    responseType === "auto" ? inferResponseType(response) : responseType;
-
-  switch (effectiveType) {
-    case "json":
-      return parseJsonBody(response, requestInfo);
-
-    case "text": {
-      const text = await response.text();
-      return text === "" ? null : text;
-    }
-
-    case "blob":
-      if (typeof response.blob !== "function") {
-        throw new TypeError(
-          "Blob responses are not supported in this runtime. " +
-            "Use responseType \"json\" or \"text\" instead.",
-        );
+      // @ts-ignore
+      if (typeof import.meta !== "undefined" && import.meta.env) {
+        // @ts-ignore
+        viteApiUrl = import.meta.env.VITE_API_URL;
       }
-      return response.blob();
-  }
-}
+    } catch (e) {
+      // ignore
+    }
 
-export async function customFetch<T = unknown>(
-  input: RequestInfo | URL,
-  options: CustomFetchOptions = {},
-): Promise<T> {
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+    const envBaseUrl =
+      (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
+      viteApiUrl ||
+      "http://10.0.2.2:5000";
 
-  const method = resolveMethod(input, init.method);
+    const baseToUse = storedBaseUrl || envBaseUrl;
 
-  if (init.body != null && (method === "GET" || method === "HEAD")) {
-    throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
-  }
-
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
-
-  if (
-    typeof init.body === "string" &&
-    !headers.has("content-type") &&
-    looksLikeJson(init.body)
-  ) {
-    headers.set("content-type", "application/json");
+    if (baseToUse) {
+      const cleanBase = baseToUse.replace(/\/$/, "");
+      const cleanPath = url.startsWith("/") ? url : `/${url}`;
+      fullUrl = `${cleanBase}${cleanPath}`;
+      console.log("[customFetch] Resolved full URL:", fullUrl);
+    } else {
+      console.log("[customFetch] Using relative URL for API route");
+    }
   }
 
-  if (responseType === "json" && !headers.has("accept")) {
-    headers.set("accept", DEFAULT_JSON_ACCEPT);
+  // Retrieve token safely across both Web (localStorage) and React Native (globalThis)
+  const webToken = typeof window !== "undefined" && typeof window.localStorage !== "undefined" 
+    ? localStorage.getItem("auth_token") 
+    : null;
+  const nativeToken = (globalThis as any).__AUTH_TOKEN__;
+  const token = webToken || nativeToken;
+
+  console.log("[customFetch] Token present:", !!token);
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    console.log("[customFetch] Authorization header added");
   }
 
-  const originalUrl = resolveUrl(input);
-  const requestUrl =
-    nativeApiTransport &&
-    originalUrl.startsWith("/") &&
-    !originalUrl.startsWith("//")
-      ? `${nativeApiTransport.baseUrl}${originalUrl}`
-      : originalUrl;
-
-  if (nativeApiTransport && !headers.has("authorization")) {
-    const token = await nativeApiTransport.getToken();
-    if (token) headers.set("authorization", `Bearer ${token}`);
-  }
-
-  const requestInfo = { method, url: requestUrl };
-
-  const response = await fetch(requestUrl, {
-    ...init,
-    method,
+  console.log("[customFetch] Sending request...");
+  const response = await fetch(fullUrl, {
+    ...options,
     headers,
-    ...(nativeApiTransport && method === "GET" ? { cache: "no-store" } : {}),
   });
+  console.log("[customFetch] Response status:", response.status);
+
+  if (response.status === 401) {
+    clearNativeApiTransport();
+  }
 
   if (!response.ok) {
-    const errorData = await parseErrorBody(response, method);
-    throw new ApiError(response, errorData, requestInfo);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Request failed with status ${response.status}`);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
-}
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  return response.json();
+};
+
+export default customFetch;

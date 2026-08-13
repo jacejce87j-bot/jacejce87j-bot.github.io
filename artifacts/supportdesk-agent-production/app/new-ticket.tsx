@@ -1,4 +1,3 @@
-import { useAuth } from '@clerk/expo';
 import {
   getListTicketsQueryKey,
   getListAgentsQueryKey,
@@ -7,7 +6,7 @@ import {
   useCreateTicket,
 } from '@workspace/api-client-react';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -33,7 +32,10 @@ const CHANNELS: TicketInput['channel'][] = ['web', 'email', 'chat', 'phone', 'ap
 export default function NewTicketScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { isLoaded, isSignedIn } = useAuth();
+  
+  // Local auth stub replacing Clerk
+  const isSignedIn = true;
+
   const queryClient = useQueryClient();
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
@@ -47,22 +49,20 @@ export default function NewTicketScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState('');
+
   const agentsQuery = useListAgents({
     query: {
       queryKey: getListAgentsQueryKey(),
       enabled: Boolean(isSignedIn),
     },
   });
+  
   const templatesQuery = useListTicketTemplates({
     query: {
       queryKey: getListTicketTemplatesQueryKey(),
       enabled: Boolean(isSignedIn),
     },
   });
-
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) router.replace('/(auth)/sign-in');
-  }, [isLoaded, isSignedIn]);
 
   const createTicket = useCreateTicket({
     mutation: {
@@ -75,45 +75,6 @@ export default function NewTicketScreen() {
       },
     },
   });
-
-  if (!isLoaded || !isSignedIn) {
-    if (isLoaded && !isSignedIn) {
-      return (
-        <View style={[styles.center, { backgroundColor: colors.background, padding: 24 }]}>
-          <Text style={[styles.successTitle, { color: colors.foreground }]}>Sign in required</Text>
-          <Text style={[styles.successText, { color: colors.mutedForeground }]}>
-            Sign in to create a ticket in the SupportDesk workspace.
-          </Text>
-          <Pressable
-            onPress={() => router.replace('/(auth)/sign-in')}
-            style={[styles.button, { backgroundColor: colors.primary }]}
-          >
-            <Text style={[styles.buttonText, { color: colors.primaryForeground }]}>Go to sign in</Text>
-          </Pressable>
-        </View>
-      );
-    }
-
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background, padding: 24 }]}>
-        <ActivityIndicator color={colors.primary} />
-        <Text style={[styles.successTitle, styles.authLoadingTitle, { color: colors.foreground }]}>
-          Preparing your workspace
-        </Text>
-        <Text style={[styles.successText, { color: colors.mutedForeground }]}>
-          Checking your sign-in securely…
-        </Text>
-        <Pressable
-          onPress={() => router.replace('/(auth)/sign-in')}
-          style={[styles.button, { backgroundColor: colors.secondary }]}
-        >
-          <Text style={[styles.buttonText, { color: colors.secondaryForeground }]}>
-            Back to sign in
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   if (createdId !== null) {
     return (

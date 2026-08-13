@@ -1,10 +1,12 @@
-import { useSSO } from '@clerk/expo';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
+import { tokenStorage } from '@/lib/storage';
+import { configureNativeApiTransport } from '@workspace/api-client-react';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -14,8 +16,8 @@ type Props = {
 
 export function GoogleAuthButton({ onError }: Props) {
   const colors = useColors();
-  const { startSSOFlow } = useSSO();
   const [isLoading, setIsLoading] = useState(false);
+  const baseUrl = getProductionApiBaseUrl();
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -30,37 +32,52 @@ export function GoogleAuthButton({ onError }: Props) {
     onError('');
 
     try {
-      // Keep this identical to Clerk Expo's documented default. Clerk only
-      // includes rotating_token_nonce for an allowed SSO callback URL.
-      const redirectUrl = AuthSession.makeRedirectUri({
-        path: 'sso-callback',
-      });
-      const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
-        strategy: 'oauth_google',
-        redirectUrl,
+      // 1. Construct redirect URI back to the application
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'supportdesk',
+        path: 'auth/callback',
       });
 
-      if (!createdSessionId || !setActive) {
-        const missingFields = [...(signUp?.missingFields ?? [])];
-        if (missingFields.length > 0) {
-          onError(`Google sign-in needs: ${missingFields.join(', ')}.`);
-        } else {
-          onError('Google sign-in needs one more account step before it can continue.');
+      // 2. Open WebBrowser session pointing to your custom Express Google Auth endpoint
+      const authUrl = `${baseUrl}/api/auth/google?redirect_uri=${encodeURIComponent(redirectUri)}`;
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+
+      if (result.type === 'success' && result.url) {
+        // 3. Extract parameters/tokens returned from Express backend redirect
+        const parsedUrl = new URL(result.url);
+        const token = parsedUrl.searchParams.get('token');
+        const errorParam = parsedUrl.searchParams.get('error');
+
+        if (errorParam) {
+          throw new Error(decodeURIComponent(errorParam));
         }
-        return;
-      }
 
-      await setActive({
-        session: createdSessionId,
-        navigate: async ({ session }) => {
-          if (session?.currentTask) {
-            onError('Google sign-in needs one more account step before continuing.');
-            return;
+        if (token) {
+          await tokenStorage.setItem('userToken', token);
+          try {
+            configureNativeApiTransport(baseUrl, token);
+          } catch (e) {
+            try {
+              if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+                window.localStorage.setItem('auth_token', token);
+              }
+            } catch (e) {}
+            try {
+              (globalThis as any).__AUTH_TOKEN__ = token;
+            } catch (e) {}
           }
           router.replace('/(tabs)');
-        },
-      });
+        } else {
+          throw new Error('Authentication succeeded but no access token was returned.');
+        }
+      } else if (result.type === 'dismiss' || result.type === 'cancel') {
+        // User intentionally closed or cancelled the browser flow
+        setIsLoading(false);
+      } else {
+        throw new Error('Google authentication was cancelled or failed.');
+      }
     } catch (error) {
+      console.error('Google Auth Error:', error);
       const message =
         error instanceof Error ? error.message : 'Google sign-in could not be completed.';
       onError(message);
@@ -100,7 +117,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justify: 'center',
     flexDirection: 'row',
     gap: 10,
     marginTop: 14,

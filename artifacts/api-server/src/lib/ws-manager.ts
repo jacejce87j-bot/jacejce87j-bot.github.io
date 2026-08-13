@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage, Server } from "http";
+import jwt from "jsonwebtoken";
 import { logger } from "./logger";
 
 export type NotificationEvent =
@@ -11,12 +12,31 @@ export type NotificationEvent =
   | { type: "comment:added"; ticketId: number; subject: string; authorName: string | null; isPublic: boolean };
 
 let wss: WebSocketServer | null = null;
+const JWT_SECRET = process.env.JWT_SECRET || "internal-whiteboard-secret-key";
 
 export function initWebSocketServer(server: Server): WebSocketServer {
   wss = new WebSocketServer({ server, path: "/ws" });
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    logger.info({ ip: req.socket.remoteAddress }, "WebSocket client connected");
+    // 1. Authenticate connection via query string: /ws?token=YOUR_JWT
+    const requestUrl = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+    const token = requestUrl.searchParams.get("token");
+
+    if (!token) {
+      logger.warn({ ip: req.socket.remoteAddress }, "WebSocket connection rejected: Missing token");
+      ws.close(4001, "Unauthorized: Token required");
+      return;
+    }
+
+    try {
+      jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      logger.warn({ ip: req.socket.remoteAddress }, "WebSocket connection rejected: Invalid token");
+      ws.close(4001, "Unauthorized: Invalid token");
+      return;
+    }
+
+    logger.info({ ip: req.socket.remoteAddress }, "WebSocket client authenticated & connected");
 
     ws.on("close", () => {
       logger.info("WebSocket client disconnected");
@@ -26,7 +46,7 @@ export function initWebSocketServer(server: Server): WebSocketServer {
       logger.error({ err }, "WebSocket error");
     });
 
-    // Send a welcome ping so the client knows the connection is live
+    // 2. Send welcome ping
     ws.send(JSON.stringify({ type: "connected", timestamp: new Date().toISOString() }));
   });
 

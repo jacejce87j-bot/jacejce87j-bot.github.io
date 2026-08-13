@@ -1,8 +1,19 @@
-import { useAuth, useClerk, useUser } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import {
@@ -17,41 +28,150 @@ import { useQueryClient } from '@tanstack/react-query';
 import { formatAttachmentSize, openTicketAttachment, pickTicketFile, uploadTicketFile } from '@/components/ticketAttachments';
 import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
 
+const getToken = async () => {
+  try {
+    return (globalThis as any).__AUTH_TOKEN__ ?? (await AsyncStorage.getItem('userToken')) ?? '';
+  } catch (e) {
+    return '';
+  }
+};
+
+// Current authenticated user fetched from API
+type CurrentUser = { id: string; email: string; firstName?: string | null } | null;
+
+const STATUS_OPTIONS = ['new', 'open', 'pending', 'solved', 'closed'];
+const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
+
 export default function AgentHomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useUser();
-  const { getToken } = useAuth();
-  const { signOut } = useClerk();
   const queryClient = useQueryClient();
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
+  const baseUrl = getProductionApiBaseUrl();
+
+  // Fetch current auth user from backend to drive UI identity
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const res = await fetch(`${baseUrl}/api/auth/user`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        });
+        if (!res.ok) return;
+        const body = await res.json().catch(() => null);
+        const user = body?.user ?? null;
+        if (user) setCurrentUser({ id: user.id, email: user.email, firstName: user.firstName });
+      } catch (e) {
+        // ignore
+      }
+    })();
+  }, [baseUrl]);
+
   const [activeAgentPicker, setActiveAgentPicker] = useState<number | null>(null);
   const [uploadingTicketId, setUploadingTicketId] = useState<number | null>(null);
   const [openingAttachmentKey, setOpeningAttachmentKey] = useState<string | null>(null);
+
+  // Edit Modal Form State
+  const [editingTicket, setEditingTicket] = useState<any>(null);
+  const [editSubject, setEditSubject] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+  const [editPriority, setEditPriority] = useState('');
+  const [editAssigneeId, setEditAssigneeId] = useState<number | null>(null);
+
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
   const agentsQuery = useListAgents({
     query: {
       queryKey: getListAgentsQueryKey(),
-      enabled: Boolean(user),
+      enabled: Boolean(currentUser),
     },
   });
+
+  const ticketsQueryParams = useMemo(() => ({ limit: 50, sortBy: 'updatedAt' as const, sortDir: 'desc' as const }), []);
+
   const ticketsQuery = useListTickets(
-    { limit: 10, sortBy: 'updatedAt', sortDir: 'desc' },
+    ticketsQueryParams,
     {
       query: {
-        queryKey: getListTicketsQueryKey({ limit: 10, sortBy: 'updatedAt', sortDir: 'desc' }),
-        enabled: Boolean(user),
+        queryKey: getListTicketsQueryKey(ticketsQueryParams),
+        enabled: Boolean(currentUser),
       },
     },
   );
-  const firstName = user?.firstName || user?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Agent';
+  const firstName = currentUser?.firstName || currentUser?.email?.split('@')[0] || 'Agent';
   const updateTicket = useUpdateTicket();
-  const agents = agentsQuery.data ?? [];
-  const baseUrl = getProductionApiBaseUrl();
+  const agents = useMemo(() => agentsQuery.data ?? [], [agentsQuery.data]);
+  
 
-  const refreshTickets = async () => {
-    await queryClient.invalidateQueries({ queryKey: getListTicketsQueryKey() });
+  const currentAgent = useMemo(() => {
+    return agents.find((a) => a.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+  }, [agents, currentUser]);
+
+  const myTickets = useMemo(() => {
+    const allTickets = ticketsQuery.data?.data ?? [];
+    return allTickets.filter((ticket) => {
+      if (currentAgent?.id != null) {
+        return ticket.assigneeId === currentAgent.id;
+      }
+      return (
+        ticket.assignee?.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
+        ticket.assignee?.name?.toLowerCase().includes('agent')
+      );
+    });
+  }, [ticketsQuery.data?.data, currentAgent]);
+
+  const refreshTickets = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: getListTicketsQueryKey(ticketsQueryParams),
+    });
+  }, [queryClient, ticketsQueryParams]);
+
+  const handleSignOut = async () => {
+    try {
+      await AsyncStorage.removeItem('userToken');
+      router.replace('/(auth)/sign-in');
+    } catch (error) {
+      Alert.alert('Sign Out Error', 'Could not clear session data.');
+    }
   };
 
-  const handleAddAttachment = async (ticketId: number, currentAttachments: TicketAttachment[]) => {
+  const handleOpenEditModal = (ticket: any) => {
+    setEditingTicket(ticket);
+    setEditSubject(ticket.subject || '');
+    setEditDescription(ticket.description || '');
+    setEditStatus(ticket.status || 'open');
+    setEditPriority(ticket.priority || 'medium');
+    setEditAssigneeId(ticket.assigneeId ?? null);
+  };
+
+  const handleSaveTicket = async () => {
+    if (!editingTicket) return;
+    try {
+      await updateTicket.mutateAsync({
+        id: editingTicket.id,
+        data: {
+          subject: editSubject,
+          description: editDescription,
+          status: editStatus,
+          priority: editPriority,
+          assigneeId: editAssigneeId,
+        },
+      });
+      setEditingTicket(null);
+      await refreshTickets();
+    } catch (requestError) {
+      Alert.alert('Update failed', requestError instanceof Error ? requestError.message : 'Could not save ticket updates.');
+    }
+  };
+
+  const handleAddAttachment = async (ticketId: number, currentAttachments?: TicketAttachment[]) => {
     const file = await pickTicketFile();
     if (!file) return;
     setUploadingTicketId(ticketId);
@@ -59,7 +179,7 @@ export default function AgentHomeScreen() {
       const attachment = await uploadTicketFile(file);
       await updateTicket.mutateAsync({
         id: ticketId,
-        data: { attachments: [...currentAttachments, attachment] },
+        data: { attachments: [...(currentAttachments ?? []), attachment] },
       });
       await refreshTickets();
     } catch (requestError) {
@@ -83,7 +203,7 @@ export default function AgentHomeScreen() {
     const key = `${attachment.objectPath}-${attachment.uploadedAt}`;
     setOpeningAttachmentKey(key);
     try {
-      await openTicketAttachment(attachment, () => getToken(), baseUrl);
+      await openTicketAttachment(attachment, async () => (await getToken()) ?? "", baseUrl ?? "");
     } catch (requestError) {
       Alert.alert('Attachment unavailable', requestError instanceof Error ? requestError.message : 'The attachment could not be opened.');
     } finally {
@@ -107,7 +227,7 @@ export default function AgentHomeScreen() {
         <View style={styles.greetingRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>SUPPORTDESK AGENT</Text>
-            <Text style={[styles.title, { color: colors.foreground }]}>Good morning, {firstName}</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>{greeting}, {firstName}</Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
               Your assigned work will appear here.
             </Text>
@@ -135,9 +255,10 @@ export default function AgentHomeScreen() {
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My queue</Text>
           <Text style={[styles.sectionMeta, { color: colors.mutedForeground }]}>
-            {ticketsQuery.data?.total ?? 0} total
+            {myTickets.length} total
           </Text>
         </View>
+
         {agentsQuery.isError ? (
           <View style={[styles.agentWarning, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="users" size={16} color={colors.destructive} />
@@ -149,6 +270,7 @@ export default function AgentHomeScreen() {
             </Pressable>
           </View>
         ) : null}
+
         {ticketsQuery.isLoading ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <ActivityIndicator color={colors.primary} />
@@ -167,13 +289,13 @@ export default function AgentHomeScreen() {
               <Text style={[styles.retryText, { color: colors.secondaryForeground }]}>Retry</Text>
             </Pressable>
           </View>
-        ) : ticketsQuery.data?.data.length ? (
+        ) : myTickets.length ? (
           <View style={styles.ticketList}>
-            {ticketsQuery.data.data.map((ticket) => (
+            {myTickets.map((ticket) => (
               <View key={ticket.id} style={[styles.ticketCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.ticketTopRow}>
                   <Text style={[styles.ticketId, { color: colors.primary }]}>#{ticket.id}</Text>
-                  <Text style={[styles.ticketStatus, { color: colors.mutedForeground }]}>{ticket.status.replace('_', ' ')}</Text>
+                  <Text style={[styles.ticketStatus, { color: colors.mutedForeground }]}>{ticket.status?.replace('_', ' ')}</Text>
                 </View>
                 <Text style={[styles.ticketSubject, { color: colors.foreground }]} numberOfLines={2}>{ticket.subject}</Text>
                 <Text style={[styles.ticketMeta, { color: colors.mutedForeground }]}>
@@ -211,9 +333,18 @@ export default function AgentHomeScreen() {
                 <View style={styles.ticketActions}>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel={`Edit ticket ${ticket.id}`}
+                    onPress={() => handleOpenEditModal(ticket)}
+                    style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, pressed && styles.pressed]}
+                  >
+                    <Feather name="edit-2" size={14} color={colors.primary} />
+                    <Text style={[styles.actionText, { color: colors.primary }]}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel={`Attach a file to ticket ${ticket.id}`}
                     disabled={uploadingTicketId === ticket.id}
-                    onPress={() => void handleAddAttachment(ticket.id, ticket.attachments ?? [])}
+                    onPress={() => void handleAddAttachment(ticket.id, ticket.attachments)}
                     style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, uploadingTicketId === ticket.id && styles.disabled, pressed && styles.pressed]}
                   >
                     <Feather name="paperclip" size={14} color={colors.primary} />
@@ -249,19 +380,20 @@ export default function AgentHomeScreen() {
             <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
               <Feather name="inbox" size={22} color={colors.mutedForeground} />
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No tickets yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No tickets in your queue</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Create the first ticket from this workspace.
+              You currently have no tickets assigned to you.
             </Text>
           </View>
         )}
 
+        {/* --- SIGN OUT SECTION --- */}
         <View style={[styles.footer, { borderTopColor: colors.border }]}>
-          <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Signed in as {user?.primaryEmailAddress?.emailAddress || 'SupportDesk user'}</Text>
+          <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Signed in as {currentUser?.email ?? 'Unknown'}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Sign out"
-            onPress={() => void signOut(() => router.replace('/'))}
+            onPress={() => void handleSignOut()}
             style={({ pressed }) => [styles.signOutButton, { backgroundColor: colors.secondary }, pressed && styles.pressed]}
           >
             <Feather name="log-out" size={16} color={colors.secondaryForeground} />
@@ -269,282 +401,192 @@ export default function AgentHomeScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      {/* Edit Ticket Modal */}
+      <Modal visible={!!editingTicket} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditingTicket(null)}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit Ticket #{editingTicket?.id}</Text>
+            <Pressable onPress={() => setEditingTicket(null)}>
+              <Feather name="x" size={20} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Subject</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+              value={editSubject}
+              onChangeText={setEditSubject}
+              placeholder="Ticket Subject"
+              placeholderTextColor={colors.mutedForeground}
+            />
+
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Status</Text>
+            <View style={styles.chipRow}>
+              {STATUS_OPTIONS.map((status) => (
+                <Pressable
+                  key={status}
+                  onPress={() => setEditStatus(status)}
+                  style={[
+                    styles.chip,
+                    { borderColor: colors.border, backgroundColor: editStatus === status ? colors.primary : colors.card },
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: editStatus === status ? colors.primaryForeground : colors.foreground }]}>
+                    {status.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Priority</Text>
+            <View style={styles.chipRow}>
+              {PRIORITY_OPTIONS.map((priority) => (
+                <Pressable
+                  key={priority}
+                  onPress={() => setEditPriority(priority)}
+                  style={[
+                    styles.chip,
+                    { borderColor: colors.border, backgroundColor: editPriority === priority ? colors.primary : colors.card },
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: editPriority === priority ? colors.primaryForeground : colors.foreground }]}>
+                    {priority.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Assignee</Text>
+            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollRow}>
+              <Pressable
+                onPress={() => setEditAssigneeId(null)}
+                style={[
+                  styles.chip,
+                  { borderColor: colors.border, backgroundColor: editAssigneeId === null ? colors.primary : colors.card },
+                ]}
+              >
+                <Text style={[styles.chipText, { color: editAssigneeId === null ? colors.primaryForeground : colors.foreground }]}>Unassigned</Text>
+              </Pressable>
+              {agents.map((agent) => (
+                <Pressable
+                  key={agent.id}
+                  onPress={() => setEditAssigneeId(agent.id)}
+                  style={[
+                    styles.chip,
+                    { borderColor: colors.border, backgroundColor: editAssigneeId === agent.id ? colors.primary : colors.card },
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: editAssigneeId === agent.id ? colors.primaryForeground : colors.foreground }]}>
+                    {agent.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Description</Text>
+            <TextInput
+              style={[styles.textInput, styles.textAreaInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+              value={editDescription}
+              onChangeText={setEditDescription}
+              multiline
+              placeholder="Description"
+              placeholderTextColor={colors.mutedForeground}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => setEditingTicket(null)}
+                style={[styles.modalButton, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.mutedForeground }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleSaveTicket()}
+                disabled={updateTicket.isPending}
+                style={[styles.modalButton, { backgroundColor: colors.primary }]}
+              >
+                {updateTicket.isPending ? (
+                  <ActivityIndicator size="small" color={colors.primaryForeground} />
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: colors.primaryForeground }]}>Save Changes</Text>
+                )}
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 22,
-    gap: 22,
-  },
-  scroll: {
-    flex: 1,
-  },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  eyebrow: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    letterSpacing: 1.2,
-    marginBottom: 8,
-  },
-  title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 26,
-    letterSpacing: -0.4,
-  },
-  subtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 6,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-  },
-  environmentCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  iconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  cardText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 5,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  sectionTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-  },
-  sectionMeta: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-  },
-  ticketList: {
-    gap: 10,
-  },
-  ticketCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 14,
-  },
-  ticketTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  ticketId: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-  },
-  ticketStatus: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    textTransform: 'capitalize',
-  },
-  ticketSubject: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  ticketMeta: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    marginTop: 7,
-    textTransform: 'capitalize',
-  },
-  emptyCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingVertical: 34,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  emptyIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  emptyTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-  },
-  emptyText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-    marginTop: 7,
-  },
-  retryButton: {
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginTop: 16,
-  },
-  retryText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-  },
-  footer: {
-    borderTopWidth: 1,
-    paddingTop: 14,
-    gap: 12,
-    marginTop: 4,
-  },
-  footerText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-  },
-  signOutButton: {
-    borderRadius: 8,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  signOutText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-  ticketDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 11,
-  },
-  ticketDetailLabel: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-  },
-  ticketDetailValue: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-  },
-  attachments: {
-    gap: 7,
-    marginTop: 11,
-  },
-  attachmentRow: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  attachmentInfo: {
-    flex: 1,
-  },
-  attachmentName: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-  },
-  attachmentMeta: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    marginTop: 2,
-  },
-  ticketActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  agentWarning: {
-    minHeight: 38,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  agentWarningText: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-  },
-  actionButton: {
-    minHeight: 34,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  actionText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-  },
-  agentPicker: {
-    borderWidth: 1,
-    borderRadius: 8,
-    marginTop: 8,
-    paddingVertical: 4,
-  },
-  agentOption: {
-    paddingHorizontal: 11,
-    paddingVertical: 10,
-  },
-  agentOptionText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-  },
-  disabled: {
-    opacity: 0.5,
-  },
+  container: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: 22, gap: 22 },
+  scroll: { flex: 1 },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  eyebrow: { fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 1.2, marginBottom: 8 },
+  title: { fontFamily: 'Inter_700Bold', fontSize: 26, letterSpacing: -0.4 },
+  subtitle: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21, marginTop: 6 },
+  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: 'Inter_700Bold', fontSize: 18 },
+  environmentCard: { borderRadius: 8, borderWidth: 1, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14, marginBottom: 4 },
+  cardText: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 18 },
+  sectionMeta: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  ticketList: { gap: 10 },
+  ticketCard: { borderRadius: 8, borderWidth: 1, padding: 14 },
+  ticketTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  ticketId: { fontFamily: 'Inter_700Bold', fontSize: 12 },
+  ticketStatus: { fontFamily: 'Inter_500Medium', fontSize: 11, textTransform: 'capitalize' },
+  ticketSubject: { fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 20 },
+  ticketMeta: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 7, textTransform: 'capitalize' },
+  emptyCard: { borderRadius: 8, borderWidth: 1, paddingVertical: 34, paddingHorizontal: 24, alignItems: 'center' },
+  emptyIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  emptyText: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 7 },
+  retryButton: { borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10, marginTop: 16 },
+  retryText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  footer: { borderTopWidth: 1, paddingTop: 14, gap: 12, marginTop: 4 },
+  footerText: { fontFamily: 'Inter_400Regular', fontSize: 11 },
+  signOutButton: { borderRadius: 8, minHeight: 44, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  signOutText: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  pressed: { opacity: 0.75 },
+  ticketDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 11 },
+  ticketDetailLabel: { fontFamily: 'Inter_400Regular', fontSize: 11 },
+  ticketDetailValue: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  attachments: { gap: 7, marginTop: 11 },
+  attachmentRow: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  attachmentInfo: { flex: 1 },
+  attachmentName: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  attachmentMeta: { fontFamily: 'Inter_400Regular', fontSize: 10, marginTop: 2 },
+  ticketActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  agentWarning: { minHeight: 38, borderWidth: 1, borderRadius: 8, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  agentWarningText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 11 },
+  actionButton: { minHeight: 34, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  actionText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  agentPicker: { borderWidth: 1, borderRadius: 8, marginTop: 8, paddingVertical: 4 },
+  agentOption: { paddingHorizontal: 11, paddingVertical: 10 },
+  agentOptionText: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  disabled: { opacity: 0.5 },
+  modalContainer: { flex: 1 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
+  modalTitle: { fontFamily: 'Inter_700Bold', fontSize: 18 },
+  modalBody: { flex: 1 },
+  modalContent: { padding: 20, gap: 12, paddingBottom: 40 },
+  inputLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12, marginTop: 8 },
+  textInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  textAreaInput: { height: 100, textAlignVertical: 'top' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 4 },
+  horizontalScrollRow: { gap: 8, paddingVertical: 4 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+  chipText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  modalButton: { flex: 1, minHeight: 44, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  modalButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
 });

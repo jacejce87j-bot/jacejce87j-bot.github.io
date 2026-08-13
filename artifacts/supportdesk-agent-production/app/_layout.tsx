@@ -1,20 +1,23 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useColorScheme } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ClerkProvider } from '@clerk/expo';
-import { tokenCache } from '@clerk/expo/token-cache';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import * as SplashScreen from 'expo-splash-screen';
 import { ProductionApiProvider } from '@/components/ProductionApiProvider';
 
-const queryClient = new QueryClient();
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
-const clerkProxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
+// Prevent splash screen from auto-hiding until fonts are loaded
+SplashScreen.preventAutoHideAsync();
 
-if (!publishableKey) {
-  throw new Error(
-    'Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY. The production app cannot start without Clerk configuration.',
-  );
-}
+const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
@@ -23,24 +26,39 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="new-ticket" options={{ headerShown: false }} />
+      <Stack.Screen name="+not-found" />
     </Stack>
   );
 }
 
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
+
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
-      <ClerkProvider
-        publishableKey={publishableKey}
-        tokenCache={tokenCache}
-        proxyUrl={clerkProxyUrl}
-      >
-        <QueryClientProvider client={queryClient}>
-          <ProductionApiProvider>
-            <RootLayoutNav />
-          </ProductionApiProvider>
-        </QueryClientProvider>
-      </ClerkProvider>
+      <QueryClientProvider client={queryClient}>
+        <ProductionApiProvider>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <RootLayoutNav />
+        </ProductionApiProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }

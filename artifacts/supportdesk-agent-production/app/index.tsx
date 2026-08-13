@@ -1,17 +1,34 @@
-import { useAuth } from '@clerk/expo';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { tokenStorage } from '@/lib/storage';
 
 export default function IndexScreen() {
   const colors = useColors();
-  const { isLoaded, isSignedIn } = useAuth();
 
   useEffect(() => {
-    if (!isLoaded) return;
-    router.replace(isSignedIn ? '/(tabs)' : '/(auth)/sign-in');
-  }, [isLoaded, isSignedIn]);
+    async function checkAuthAndNavigate() {
+      try {
+        // 1. Check for stored custom JWT token
+        const token = await tokenStorage.getItem('userToken');
+
+        if (token) {
+          // User is authenticated -> Go to tabs dashboard
+          router.replace('/(tabs)');
+        } else {
+          // User is unauthenticated -> Go to sign-in screen
+          router.replace('/(auth)/sign-in');
+        }
+      } catch (error) {
+        console.error('Failed to read auth token from storage:', error);
+        // Fallback to sign-in on error
+        router.replace('/(auth)/sign-in');
+      }
+    }
+
+    void checkAuthAndNavigate();
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -20,7 +37,7 @@ export default function IndexScreen() {
       </View>
       <Text style={[styles.title, { color: colors.foreground }]}>SupportDesk</Text>
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Agent workspace</Text>
-      {!isLoaded && <ActivityIndicator color={colors.primary} style={styles.spinner} />}
+      <ActivityIndicator color={colors.primary} style={styles.spinner} />
     </View>
   );
 }

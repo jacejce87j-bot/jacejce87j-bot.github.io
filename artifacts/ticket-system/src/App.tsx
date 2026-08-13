@@ -1,14 +1,6 @@
-import { Component, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
-import {
-  ClerkProvider,
-  SignUp,
-  useAuth as useClerkAuth,
-  useClerk,
-} from "@clerk/react";
-import { publishableKeyFromHost } from "@clerk/react/internal";
-import { shadcn } from "@clerk/themes";
-import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -19,6 +11,7 @@ import ContactList from "@/pages/contacts/index";
 import OrganizationList from "@/pages/organizations/index";
 import AgentList from "@/pages/agents/index";
 import Settings from "@/pages/settings";
+import Users from "@/pages/users/index";
 import TicketDetail from "@/pages/tickets/[id]";
 import NewTicket from "@/pages/tickets/new";
 import ContactDetail from "@/pages/contacts/[id]";
@@ -28,72 +21,56 @@ import { useSupportUser } from "@/hooks/use-support-user";
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-
-if (!clerkPubKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY.");
-}
-
-function stripBase(path: string) {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || "/"
-    : path;
-}
 
 function AppRoutes() {
-  const { isLoaded, isSignedIn } = useClerkAuth();
-  const { user, isLoading: isSupportUserLoading, accessDenied } = useSupportUser();
+  const { user, isLoading, accessDenied } = useSupportUser();
 
-  if (!isLoaded) {
-    return <LoadingScreen label="Loading secure sign-in..." />;
+  if (isLoading) {
+    return <LoadingScreen label="Loading your SupportDesk workspace..." />;
   }
 
+  const isSignedIn = !!user;
+
+  // 1. Unauthenticated Route Guard
+  if (!isSignedIn) {
+    return (
+      <Switch>
+        <Route path="/login" component={Login} />
+        <Route path="/sign-in" component={Login} />
+        <Route>
+          <Redirect to="/login" />
+        </Route>
+      </Switch>
+    );
+  }
+
+  // 2. Access Denied Guard
+  if (accessDenied) {
+    return <AccessDenied />;
+  }
+
+  // 3. Authenticated Route Tree (Direct children under Switch, no Fragments)
   return (
     <Switch>
-      <Route path="/sign-in/*?" component={Login} />
-      <Route
-        path="/sign-up/*?"
-        component={() => (
-          <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-            <SignUp
-              routing="path"
-              path={`${basePath}/sign-up`}
-              signInUrl={`${basePath}/sign-in`}
-            />
-          </main>
-        )}
-      />
-      {!isSignedIn ? (
-        <Route>
-          <Redirect to="/sign-in" />
-        </Route>
-      ) : isSupportUserLoading ? (
-        <Route>
-          <LoadingScreen label="Loading your SupportDesk workspace..." />
-        </Route>
-      ) : accessDenied || !user ? (
-        <Route>
-          <AccessDenied />
-        </Route>
-      ) : (
-        <>
-          <Route path="/" component={Dashboard} />
-          <Route path="/tickets" component={TicketList} />
-          <Route path="/tickets/new" component={TicketCreationRoute} />
-          <Route path="/tickets/:id" component={TicketDetail} />
-          <Route path="/contacts" component={ContactList} />
-          <Route path="/contacts/:id" component={ContactDetail} />
-          <Route path="/organizations" component={OrganizationList} />
-          <Route path="/organizations/:id" component={OrganizationDetail} />
-          <Route path="/agents" component={AgentList} />
-          <Route path="/settings" component={Settings} />
-          <Route component={NotFound} />
-        </>
-      )}
+      <Route path="/login">
+        <Redirect to="/" />
+      </Route>
+      <Route path="/sign-in">
+        <Redirect to="/" />
+      </Route>
+
+      <Route path="/" component={Dashboard} />
+      <Route path="/tickets" component={TicketList} />
+      <Route path="/tickets/new" component={TicketCreationRoute} />
+      <Route path="/tickets/:id" component={TicketDetail} />
+      <Route path="/contacts" component={ContactList} />
+      <Route path="/contacts/:id" component={ContactDetail} />
+      <Route path="/users" component={Users} />
+      <Route path="/organizations" component={OrganizationList} />
+      <Route path="/organizations/:id" component={OrganizationDetail} />
+      <Route path="/agents" component={AgentList} />
+      <Route path="/settings" component={Settings} />
+      <Route component={NotFound} />
     </Switch>
   );
 }
@@ -200,85 +177,13 @@ function AccessDenied() {
   );
 }
 
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const client = useQueryClient();
-  const previousUserId = useRef<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
-      if (previousUserId.current !== undefined && previousUserId.current !== userId) {
-        client.clear();
-      }
-      previousUserId.current = userId;
-    });
-    return unsubscribe;
-  }, [addListener, client]);
-
-  return null;
-}
-
-function ClerkApp() {
-  const [, setLocation] = useLocation();
-
-  return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      appearance={{
-        theme: shadcn,
-        cssLayerName: "clerk",
-        options: {
-          logoPlacement: "inside",
-          logoLinkUrl: basePath || "/",
-          logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-        },
-        variables: {
-          colorPrimary: "#2563eb",
-          colorForeground: "#0f172a",
-          colorMutedForeground: "#64748b",
-          colorBackground: "#ffffff",
-          colorInput: "#ffffff",
-          colorInputForeground: "#0f172a",
-          colorNeutral: "#cbd5e1",
-          fontFamily: "Plus Jakarta Sans, sans-serif",
-          borderRadius: "0.5rem",
-        },
-      }}
-      signInUrl={`${basePath}/sign-in`}
-      signUpUrl={`${basePath}/sign-up`}
-      localization={{
-        signIn: {
-          start: {
-            title: "Sign in to SupportDesk",
-            subtitle: "Welcome back. Sign in to continue.",
-          },
-        },
-        signUp: {
-          start: {
-            title: "Create your SupportDesk account",
-            subtitle: "Get started with your support workspace.",
-          },
-        },
-      }}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <ClerkQueryClientCacheInvalidator />
-      <AppRoutes />
-    </ClerkProvider>
-  );
-}
-
-
 export default function App() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <WouterRouter base={basePath}>
-            <ClerkApp />
+            <AppRoutes />
           </WouterRouter>
           <Toaster />
         </TooltipProvider>

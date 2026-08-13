@@ -1,38 +1,22 @@
 {
   "expo": {
-    "name": "SupportDesk Agent",
-    "slug": "supportdesk-agent-production",
+    "name": "Orion",
+    "slug": "orion",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "supportdesk-agent-production",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "android": {
+      "package": "com.supportdesk.agent",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
-    "ios": {
-      "supportsTablet": false
-    },
-    "android": {},
-    "web": {
-      "favicon": "./assets/images/icon.png"
-    },
-    "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
-      "expo-font",
-      "expo-web-browser"
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+    "extra": {
+      "eas": {
+        "projectId": "8ae22d43-b4f1-47f3-abea-d785ae9d46f9"
+      }
     }
   }
 }

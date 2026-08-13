@@ -120,10 +120,8 @@ export default function AgentHomeScreen() {
       if (currentAgent?.id != null) {
         return ticket.assigneeId === currentAgent.id;
       }
-      return (
-        ticket.assignee?.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
-        ticket.assignee?.name?.toLowerCase().includes('agent')
-      );
+      // If we don't have a matching agent id, do not surface tickets.
+      return false;
     });
   }, [ticketsQuery.data?.data, currentAgent]);
 

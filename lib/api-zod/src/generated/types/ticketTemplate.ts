@@ -6,10 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export interface TemplateField {
+  key: string;
+  label: string;
+  required?: boolean;
+  type?: 'text' | 'number' | 'phone';
+}
+
 export interface TicketTemplate {
   id: number;
   name: string;
   description: string;
+  fields?: TemplateField[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

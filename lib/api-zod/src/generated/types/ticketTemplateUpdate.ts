@@ -11,5 +11,11 @@ export interface TicketTemplateUpdate {
   name?: string;
   /** @minLength 1 */
   description?: string;
+  fields?: {
+    key: string;
+    label: string;
+    required?: boolean;
+    type?: 'text' | 'number' | 'phone';
+  }[];
   isActive?: boolean;
 }

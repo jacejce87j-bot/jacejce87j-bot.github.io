@@ -8,6 +8,11 @@ import {
   Building2,
   Settings,
   Headset,
+  FolderCog,
+  BarChart3,
+  Gauge,
+  Activity,
+  BookOpen,
   LogOut,
 } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
@@ -72,6 +77,12 @@ export function AppLayout({ children }: LayoutProps) {
     { href: "/users", label: "Users", icon: Users },
     { href: "/organizations", label: "Organizations", icon: Building2 },
     { href: "/agents", label: "Agents", icon: Headset },
+    { href: "/devicetypes", label: "Device Types", icon: FolderCog },
+    { href: "/reports", label: "Reports", icon: BarChart3 },
+    { href: "/reports/builder", label: "Report Builder", icon: BarChart3 },
+    { href: "/reports/agent-kpis", label: "Agent KPIs", icon: Gauge },
+    { href: "/reports/health", label: "Vehicle Health", icon: Activity },
+    { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
 

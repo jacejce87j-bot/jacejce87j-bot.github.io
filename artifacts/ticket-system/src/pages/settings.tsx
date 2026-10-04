@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,13 @@ export default function Settings() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [templateForm, setTemplateForm] = useState({ name: "", description: "" });
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [macros, setMacros] = useState<Array<{ id: number; name: string; content: string; scope: string; isActive: boolean }>>([]);
+  const [macroAnalytics, setMacroAnalytics] = useState<Array<{ macroId: number; name: string; scope: string | null; usageCount: number; lastUsedAt: string | null }>>([]);
+  const [macroForm, setMacroForm] = useState({ name: "", content: "", scope: "all" });
+  const [routingAgents, setRoutingAgents] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [onCallAgentId, setOnCallAgentId] = useState("");
+  const [backupAgentId, setBackupAgentId] = useState("");
+  const [routingSaving, setRoutingSaving] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createPolicy = useCreateSlaPolicy({
@@ -86,7 +93,60 @@ export default function Settings() {
       onError: () => toast({ title: "Could not delete template", description: "Admin access is required.", variant: "destructive" }),
     },
   });
-  const isAdmin = user?.role === "admin";
+  const normalizedRole = String(user?.role ?? "").trim().toLowerCase();
+  const isAdmin = normalizedRole === "admin";
+  const canManageTemplates = ["admin", "supervisor", "agent"].includes(normalizedRole);
+  const loadMacros = async () => {
+    const response = await fetch("/api/settings/ticket-macros", { credentials: "include" });
+    if (response.ok) setMacros(await response.json());
+  };
+  const loadMacroAnalytics = async () => {
+    const response = await fetch("/api/settings/ticket-macros/analytics", { credentials: "include" });
+    if (response.ok) setMacroAnalytics(await response.json());
+  };
+  useEffect(() => { void loadMacros(); void loadMacroAnalytics(); }, []);
+  useEffect(() => {
+    void Promise.all([
+      fetch("/api/agents", { credentials: "include" }).then((response) => response.ok ? response.json() : []),
+      fetch("/api/settings/routing", { credentials: "include" }).then((response) => response.ok ? response.json() : { onCallAgentId: null }),
+    ]).then(([agents, routing]) => {
+      setRoutingAgents(Array.isArray(agents) ? agents : []);
+      setOnCallAgentId(routing?.onCallAgentId == null ? "" : String(routing.onCallAgentId));
+      setBackupAgentId(routing?.backupAgentId == null ? "" : String(routing.backupAgentId));
+    });
+  }, []);
+  const saveRouting = async () => {
+    setRoutingSaving(true);
+    try {
+      const response = await fetch("/api/settings/routing", {
+        method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ onCallAgentId: onCallAgentId || null, backupAgentId: backupAgentId || null }),
+      });
+      if (!response.ok) throw new Error("Unable to save routing settings");
+      toast({ title: "Routing settings saved" });
+    } catch (error) {
+      toast({ title: "Could not save routing settings", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+    } finally {
+      setRoutingSaving(false);
+    }
+  };
+  const saveMacro = async () => {
+    if (!macroForm.name.trim() || !macroForm.content.trim()) return;
+    const response = await fetch("/api/settings/ticket-macros", {
+      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(macroForm),
+    });
+    if (response.ok) {
+      setMacroForm({ name: "", content: "", scope: "all" });
+      await loadMacros();
+      await loadMacroAnalytics();
+      toast({ title: "Macro added" });
+    } else toast({ title: "Could not save macro", variant: "destructive" });
+  };
+  const deleteMacro = async (id: number) => {
+    const response = await fetch(`/api/settings/ticket-macros/${id}`, { method: "DELETE", credentials: "include" });
+    if (response.ok) await loadMacros();
+  };
 
   const startEditing = (policy: NonNullable<typeof policies>[number]) => {
     setEditingId(policy.id);
@@ -129,6 +189,18 @@ export default function Settings() {
           </div>
         </div>
 
+        <Card>
+          <CardHeader><CardTitle>Ticket routing</CardTitle><CardDescription>Assign new unassigned tickets to the configured on-call agent.</CardDescription></CardHeader>
+          <CardContent className="space-y-3">
+            {!isAdmin ? <p className="text-sm text-muted-foreground">Only administrators can change routing settings.</p> : (
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="grid min-w-[280px] gap-2"><Label htmlFor="on-call-agent">On-call agent</Label><Select value={onCallAgentId || "none"} onValueChange={(value) => setOnCallAgentId(value === "none" ? "" : value)}><SelectTrigger id="on-call-agent"><SelectValue placeholder="No automatic assignment" /></SelectTrigger><SelectContent><SelectItem value="none">No automatic assignment</SelectItem>{routingAgents.map((agent) => <SelectItem key={agent.id} value={String(agent.id)}>{agent.name} ({agent.email})</SelectItem>)}</SelectContent></Select></div>
+                <div className="grid min-w-[280px] gap-2"><Label htmlFor="backup-agent">Backup agent</Label><Select value={backupAgentId || "none"} onValueChange={(value) => setBackupAgentId(value === "none" ? "" : value)}><SelectTrigger id="backup-agent"><SelectValue placeholder="No backup assignment" /></SelectTrigger><SelectContent><SelectItem value="none">No backup assignment</SelectItem>{routingAgents.filter((agent) => String(agent.id) !== onCallAgentId).map((agent) => <SelectItem key={agent.id} value={String(agent.id)}>{agent.name} ({agent.email})</SelectItem>)}</SelectContent></Select></div>
+                <Button onClick={() => void saveRouting()} disabled={routingSaving}>{routingSaving ? "Saving..." : "Save routing"}</Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>
@@ -203,8 +275,8 @@ export default function Settings() {
           <CardContent className="space-y-5">
             {isAuthLoading ? <div className="text-sm text-muted-foreground">Checking administrator access...</div> : !user ? (
               <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Sign in with your support account to manage ticket templates.</div>
-            ) : !isAdmin ? (
-              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Only administrators can create or change ticket templates.</div>
+            ) : !canManageTemplates ? (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Only support administrators, supervisors, or agents with template access can create or change ticket templates.</div>
             ) : (
               <>
                 <div className="rounded-lg border bg-muted/20 p-4">
@@ -279,6 +351,49 @@ export default function Settings() {
                       <Plus className="mx-auto mb-2 h-4 w-4" />No ticket templates yet.
                     </div>
                   )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Ticket macros</CardTitle>
+            <CardDescription>Create reusable replies for descriptions, public replies, and internal notes.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!canManageTemplates ? <div className="text-sm text-muted-foreground">You do not have permission to manage macros.</div> : (
+              <>
+                <div className="grid gap-3 rounded-lg border bg-muted/20 p-4">
+                  <Input placeholder="Macro name" value={macroForm.name} onChange={(event) => setMacroForm({ ...macroForm, name: event.target.value })} />
+                  <textarea placeholder="Hi there, your ticket has been received..." value={macroForm.content} onChange={(event) => setMacroForm({ ...macroForm, content: event.target.value })} className="min-h-[100px] rounded-md border bg-transparent px-3 py-2 text-sm" />
+                  <Select value={macroForm.scope} onValueChange={(scope) => setMacroForm({ ...macroForm, scope })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Available everywhere</SelectItem>
+                      <SelectItem value="description">Ticket descriptions</SelectItem>
+                      <SelectItem value="public_comment">Public replies</SelectItem>
+                      <SelectItem value="internal_comment">Internal notes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => void saveMacro()} disabled={!macroForm.name.trim() || !macroForm.content.trim()}><Save className="mr-2 h-4 w-4" />Add macro</Button>
+                </div>
+                {macros.map((macro) => (
+                  <div key={macro.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                    <div><p className="font-medium">{macro.name}</p><p className="whitespace-pre-wrap text-sm text-muted-foreground">{macro.content}</p><Badge variant="outline" className="mt-2">{macro.scope}</Badge></div>
+                    <Button variant="outline" size="sm" onClick={() => void deleteMacro(macro.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                  <p className="font-medium">Macro usage analytics</p>
+                  {macroAnalytics.length ? macroAnalytics.map((row) => (
+                    <div key={`${row.macroId}-${row.scope ?? "unused"}`} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="truncate">{row.name} <span className="text-muted-foreground">({row.scope ?? "unused"})</span></span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {row.usageCount} uses{row.lastUsedAt ? ` · last ${new Date(row.lastUsedAt).toLocaleDateString()}` : ""}
+                      </span>
+                    </div>
+                  )) : <p className="text-sm text-muted-foreground">No macro usage recorded yet.</p>}
                 </div>
               </>
             )}

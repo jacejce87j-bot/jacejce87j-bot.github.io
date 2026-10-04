@@ -10,7 +10,7 @@ import {
   setObjectAclPolicy,
 } from './objectAcl';
 
-const REPLIT_SIDECAR_ENDPOINT = 'http://127.0.0.1:1106';
+const REPLIT_SIDECAR_ENDPOINT = process.env.REPLIT_SIDECAR_ENDPOINT || 'http://127.0.0.1:1106';
 
 export const objectStorageClient = new Storage({
   credentials: {

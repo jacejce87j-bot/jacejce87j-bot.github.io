@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage, Server } from "http";
 import jwt from "jsonwebtoken";
 import { logger } from "./logger";
+import { JWT_SECRET } from "./jwt-secret";
 
 export type NotificationEvent =
   | { type: "ticket:created"; ticketId: number; subject: string; priority: string; assigneeId: number | null }
@@ -12,7 +13,6 @@ export type NotificationEvent =
   | { type: "comment:added"; ticketId: number; subject: string; authorName: string | null; isPublic: boolean };
 
 let wss: WebSocketServer | null = null;
-const JWT_SECRET = process.env.JWT_SECRET || "internal-whiteboard-secret-key";
 
 export function initWebSocketServer(server: Server): WebSocketServer {
   wss = new WebSocketServer({ server, path: "/ws" });

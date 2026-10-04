@@ -128,7 +128,48 @@ CREATE TABLE IF NOT EXISTS ticket_templates (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
+  fields JSONB NOT NULL DEFAULT '[]',
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+-- Create attachments table to store uploaded file bytes
+CREATE TABLE IF NOT EXISTS attachments (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id INTEGER REFERENCES tickets(id) ON DELETE SET NULL,
+  comment_id INTEGER REFERENCES comments(id) ON DELETE SET NULL,
+  filename TEXT NOT NULL,
+  content_type TEXT,
+  size INTEGER,
+  uploaded_by VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+  data BYTEA NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ticket_rules (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  conditions JSONB NOT NULL DEFAULT '{}'::jsonb,
+  actions JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_base_articles (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  tags TEXT[] NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'published', 'archived')),
+  source_ticket_id INTEGER REFERENCES tickets(id) ON DELETE SET NULL,
+  created_by TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS knowledge_base_articles_status_updated_idx
+  ON knowledge_base_articles (status, updated_at DESC);

@@ -138,8 +138,9 @@ async function startMetro(productionApiDomain) {
       : '',
   };
 
+  const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
   metroProcess = spawn(
-    'pnpm',
+    pnpmCmd,
     [
       'exec',
       'expo',

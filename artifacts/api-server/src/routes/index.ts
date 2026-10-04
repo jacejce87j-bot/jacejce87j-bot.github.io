@@ -10,7 +10,12 @@ import authRouter from "./auth";
 import usersRouter from "./users";
 import storageRouter from "./storage";
 import settingsRouter from "./settings";
+import deviceTypesRouter from "./device-types";
 import { requireAuth } from "../middlewares/requireAuth";
+import healthReportsRouter from "./health-reports";
+import slaReportsRouter from "./sla-reports";
+import knowledgeBaseRouter from "./knowledge-base";
+import reportBuilderRouter from "./report-builder";
 
 const router: IRouter = Router();
 
@@ -20,11 +25,16 @@ router.use(usersRouter);
 router.use(storageRouter);
 router.use(requireAuth);
 router.use("/tickets", ticketsRouter);
+router.use("/health-reports", healthReportsRouter);
+router.use("/reports", slaReportsRouter);
+router.use("/reports", reportBuilderRouter);
+router.use("/knowledge-base", knowledgeBaseRouter);
 router.use("/contacts", contactsRouter);
 router.use("/organizations", organizationsRouter);
 router.use("/agents", agentsRouter);
 router.use("/tags", tagsRouter);
 router.use("/dashboard", dashboardRouter);
+router.use("/device-types", deviceTypesRouter);
 router.use("/settings", settingsRouter);
 
 export default router;

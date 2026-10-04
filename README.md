@@ -120,6 +120,28 @@ The API server is an Express application with:
 
 The server must bind to the `PORT` environment variable. It is normally started by the configured Replit workflow rather than manually.
 
+### Vehicle Health Monitor email import
+
+The API can automatically import unread PDF health reports from an IMAP mailbox.
+Copy `artifacts/api-server/.env.example` to the API environment file and set
+`VEHICLE_HEALTH_IMAP_HOST`, `VEHICLE_HEALTH_IMAP_USER`, and
+`VEHICLE_HEALTH_IMAP_PASS` using a dedicated mailbox credential or app password.
+At least one of `VEHICLE_HEALTH_IMAP_FROM` or `VEHICLE_HEALTH_IMAP_SUBJECT` is
+required to restrict imports to the report email. Polling defaults to once per
+minute and processes at most 10 unread messages per poll, defaulting to a 30-day
+lookback. Configure `VEHICLE_HEALTH_IMAP_POLL_INTERVAL_MS` (minimum 15000),
+`VEHICLE_HEALTH_IMAP_BATCH_SIZE` (1-50),
+`VEHICLE_HEALTH_IMAP_LOOKBACK_DAYS` (1-365), and
+`VEHICLE_HEALTH_IMAP_MAX_MESSAGE_BYTES` (1-20 MiB) if those defaults need to
+change. IMAP TLS is enabled by default.
+
+Matching unread messages with PDF attachments go through the same validation and
+upsert logic as manual uploads. A message is marked read after each PDF is either
+imported or recorded as a failed import, so malformed files do not retry forever.
+Content hashes and IMAP UID validity prevent repeat imports. Unmatched messages
+remain unread; oversized messages and failed attachments are recorded for
+operator review. The Health Monitor page refreshes automatically once per minute.
+
 ## Authentication and authorization
 
 Clerk is the identity provider for both clients:

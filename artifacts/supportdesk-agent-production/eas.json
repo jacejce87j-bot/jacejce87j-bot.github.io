@@ -1,6 +1,7 @@
 {
   "cli": {
     "version": ">= 12.0.0",
+    "packageManager": "pnpm",
     "appVersionSource": "remote"
   },
   "build": {
@@ -10,8 +11,10 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_PRODUCTION_API_DOMAIN": "192.168.0.7:5000",
-        "EXPO_PUBLIC_API_URL": "http://192.168.0.7:5000"
+        "EXPO_PUBLIC_PRODUCTION_API_DOMAIN": "100.116.75.63:5000",
+        "EXPO_PUBLIC_API_URL": "http://100.116.75.63:5000",
+        "PRODUCTION_API_DOMAIN": "http://100.116.75.63:5000",
+        "PRODUCTION_APP_DOMAIN": "http://100.116.75.63:5000"
       }
     },
     "local": {

@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout";
-import { useListOrganizations, getListOrganizationsQueryKey, useCreateOrganization } from "@workspace/api-client-react";
+import { useListOrganizations, getListOrganizationsQueryKey, useCreateOrganization, useDeleteOrganization } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getInitials } from "@/lib/utils";
-import { Search, Plus, Building2 } from "lucide-react";
+import { Search, Plus, Building2, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,16 @@ export default function OrganizationList() {
       onError: () => toast({ title: "Could not add organization", description: "Check the required fields and try again.", variant: "destructive" }),
     },
   });
-  
+  const deleteOrganization = useDeleteOrganization({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+        toast({ title: "Organization deleted" });
+      },
+      onError: () => toast({ title: "Delete failed", description: "Could not delete the organization.", variant: "destructive" }),
+    },
+  });
+   
   const { data, isLoading } = useListOrganizations({ 
     page, 
     limit: 25, 
@@ -82,20 +91,21 @@ export default function OrganizationList() {
                   <TableHead>Plan</TableHead>
                   <TableHead className="text-right">Contacts</TableHead>
                   <TableHead className="text-right">Tickets</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell>
+                    <TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell>
                   </TableRow>
                 ) : data?.data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">No organizations found.</TableCell>
+                    <TableCell colSpan={6} className="h-24 text-center">No organizations found.</TableCell>
                   </TableRow>
                 ) : (
                   data?.data.map((org) => (
-                    <TableRow key={org.id} className="hover:bg-muted/50 cursor-pointer group">
+                    <TableRow key={org.id} className="hover:bg-muted/50 group">
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8 rounded-md">
@@ -129,6 +139,16 @@ export default function OrganizationList() {
                       </TableCell>
                       <TableCell className="text-right text-sm">
                         {org.ticketCount || 0}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteOrganization.mutate({ id: org.id })}
+                          disabled={deleteOrganization.isPending}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))

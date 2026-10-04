@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { initWebSocketServer } from "./lib/ws-manager";
 import { startSlaChecker } from "./lib/sla-checker";
+import { startVehicleHealthEmailImporter } from "./lib/vehicle-health-email";
 
 const rawPort = process.env["PORT"];
 
@@ -22,6 +23,7 @@ const host = process.env["HOST"] || "0.0.0.0";
 const server = createServer(app);
 initWebSocketServer(server);
 startSlaChecker(60_000);
+startVehicleHealthEmailImporter();
 
 // Bind server explicitly to host and port
 server.listen(port, host, () => {

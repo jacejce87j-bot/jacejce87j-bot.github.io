@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { KeyRound, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 function RoleEditor({ email, currentRole, onSaved }: { email: string; currentRole: string; onSaved: (r: string) => void }) {
   const [role, setRole] = useState(currentRole ?? 'end_user');
@@ -52,6 +54,10 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", fullName: "", role: "end_user" });
+  const [passwordUser, setPasswordUser] = useState<any | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [updatingPassword, setUpdatingPassword] = useState(false);
   const { toast } = useToast();
 
   const fetchUsers = async () => {
@@ -73,7 +79,7 @@ export default function UsersPage() {
   const createUser = async () => {
     setCreating(true);
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email.trim(), password: form.password, fullName: form.fullName.trim() || undefined, role: form.role })
@@ -90,7 +96,59 @@ export default function UsersPage() {
     } finally {
       setCreating(false);
     }
-  }
+  };
+
+  const deleteUser = async (userId: number) => {
+    const ok = window.confirm('Delete this user?');
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to delete user');
+      }
+      toast({ title: 'User deleted' });
+      fetchUsers();
+    } catch (err: any) {
+      toast({ title: 'Could not delete user', description: err?.message || 'Check input and try again.', variant: 'destructive' });
+    }
+  };
+
+  const changePassword = async () => {
+    if (!passwordUser) return;
+    if (newPassword.length < 6) {
+      toast({ title: 'Password is too short', description: 'Use at least 6 characters.', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' });
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      const res = await fetch(`/api/users/${passwordUser.id}/password`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to update password');
+      }
+      toast({ title: 'Password updated' });
+      setPasswordUser(null);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      toast({ title: 'Could not update password', description: err?.message || 'Check the password and try again.', variant: 'destructive' });
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  const canCreateUser = !!form.email.trim() && !!form.password.trim();
 
   return (
     <AppLayout>
@@ -110,7 +168,7 @@ export default function UsersPage() {
             <div><Label>Role</Label><Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="end_user">End user</SelectItem><SelectItem value="agent">Agent</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent></Select></div>
           </div>
           <div className="mt-4">
-            <Button onClick={createUser} disabled={creating || !form.email.trim() || !form.password.trim()}>{creating ? 'Creating...' : 'Create user'}</Button>
+            <Button onClick={createUser} disabled={creating || !canCreateUser}>{creating ? 'Creating...' : 'Create user'}</Button>
           </div>
         </Card>
 
@@ -122,13 +180,14 @@ export default function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Created</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
               ) : users && users.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">No users found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-24 text-center">No users found.</TableCell></TableRow>
               ) : (
                 users?.map((u) => (
                   <TableRow key={u.id}>
@@ -142,12 +201,48 @@ export default function UsersPage() {
                       />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleString() : '—'}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => { setPasswordUser(u); setNewPassword(''); setConfirmPassword(''); }}>
+                          <KeyRound className="mr-2 h-4 w-4" /> Change password
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => deleteUser(u.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
-              )}
-            </TableBody>
+              )}            </TableBody>
           </Table>
         </Card>
+
+        <Dialog open={!!passwordUser} onOpenChange={(open) => { if (!open && !updatingPassword) setPasswordUser(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change password</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Set a new password for {passwordUser?.email}.
+            </p>
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="confirm-password">Confirm new password</Label>
+                <Input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPasswordUser(null)} disabled={updatingPassword}>Cancel</Button>
+              <Button onClick={changePassword} disabled={updatingPassword || !newPassword || !confirmPassword}>
+                {updatingPassword ? 'Updating...' : 'Update password'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

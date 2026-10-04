@@ -19,9 +19,13 @@ import { useColors } from '@/hooks/useColors';
 import {
   getListTicketsQueryKey,
   getListAgentsQueryKey,
+  getListTicketTemplatesQueryKey,
+  getGetCurrentAuthUserQueryKey,
   useListAgents,
   useListTickets,
+  useListTicketTemplates,
   useUpdateTicket,
+  useGetCurrentAuthUser,
   type TicketAttachment,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -68,9 +72,25 @@ export default function AgentHomeScreen() {
     })();
   }, [baseUrl]);
 
+  // Also fetch current user via generated hook (ensures customFetch and auth token are used)
+  const currentUserQuery = useGetCurrentAuthUser({
+    query: {
+      queryKey: getGetCurrentAuthUserQueryKey(),
+      enabled: true,
+    },
+  });
+
+  useEffect(() => {
+    const user = (currentUserQuery.data as any)?.user ?? null;
+    if (user) {
+      setCurrentUser({ id: user.id, email: user.email, firstName: user.firstName });
+    }
+  }, [currentUserQuery.data]);
+
   const [activeAgentPicker, setActiveAgentPicker] = useState<number | null>(null);
   const [uploadingTicketId, setUploadingTicketId] = useState<number | null>(null);
   const [openingAttachmentKey, setOpeningAttachmentKey] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'open' | 'pending' | 'on_hold' | 'solved' | 'closed'>('active');
 
   // Edit Modal Form State
   const [editingTicket, setEditingTicket] = useState<any>(null);
@@ -79,6 +99,17 @@ export default function AgentHomeScreen() {
   const [editStatus, setEditStatus] = useState('');
   const [editPriority, setEditPriority] = useState('');
   const [editAssigneeId, setEditAssigneeId] = useState<number | null>(null);
+  const [editTemplateId, setEditTemplateId] = useState<number | null>(null);
+  const [editTemplateFields, setEditTemplateFields] = useState<any[] | null>(null);
+  const [editTemplateValues, setEditTemplateValues] = useState<Record<string, string>>({});
+
+  const templatesQuery = useListTicketTemplates({
+    query: {
+      queryKey: getListTicketTemplatesQueryKey(),
+      enabled: Boolean(currentUser),
+    },
+  });
+  const activeTemplates = useMemo(() => (templatesQuery.data ?? []).filter((template) => template.isActive), [templatesQuery.data]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -120,10 +151,18 @@ export default function AgentHomeScreen() {
       if (currentAgent?.id != null) {
         return ticket.assigneeId === currentAgent.id;
       }
-      // If we don't have a matching agent id, do not surface tickets.
       return false;
     });
   }, [ticketsQuery.data?.data, currentAgent]);
+
+  const filteredMyTickets = useMemo(() => {
+    const activeStatuses = new Set(['open', 'pending', 'on_hold']);
+    return myTickets.filter((ticket) => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'active') return activeStatuses.has(ticket.status);
+      return ticket.status === statusFilter;
+    });
+  }, [myTickets, statusFilter]);
 
   const refreshTickets = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -147,19 +186,57 @@ export default function AgentHomeScreen() {
     setEditStatus(ticket.status || 'open');
     setEditPriority(ticket.priority || 'medium');
     setEditAssigneeId(ticket.assigneeId ?? null);
+    setEditTemplateId(null);
+    setEditTemplateFields(null);
+    setEditTemplateValues({});
+  };
+
+  const applyEditTemplate = (template: any) => {
+    setEditTemplateId(template.id);
+
+    if (template.fields && template.fields.length) {
+      setEditTemplateFields(template.fields);
+      setEditTemplateValues(Object.fromEntries(template.fields.map((field: any) => {
+        const key = String(field.key || '').replace(/[_-](.)/g, (_match, character) => String(character).toUpperCase());
+        return [field.key, editingTicket?.[key] ?? editingTicket?.[field.key] ?? ''];
+      })));
+      setEditDescription(template.description ?? '');
+      return;
+    }
+
+    setEditTemplateFields(null);
+    setEditTemplateValues({});
+    setEditDescription(template.description ?? editDescription ?? '');
   };
 
   const handleSaveTicket = async () => {
     if (!editingTicket) return;
     try {
+      let finalDescription = editDescription.trim();
+
+      if (editTemplateFields && editTemplateFields.length) {
+        const missing = editTemplateFields.filter((field) => field.required && !(editTemplateValues[field.key]?.trim()));
+        if (missing.length) {
+          Alert.alert('Template required', `Please complete the required fields: ${missing.map((field) => field.label).join(', ')}`);
+          return;
+        }
+
+        const built = editTemplateFields.map((field) => `${field.label}: ${editTemplateValues[field.key] ?? ''}`).join('\n');
+        finalDescription = [built, editDescription.trim()].filter(Boolean).join('\n\n');
+      }
+
       await updateTicket.mutateAsync({
         id: editingTicket.id,
         data: {
           subject: editSubject,
-          description: editDescription,
-          status: editStatus,
-          priority: editPriority,
+          description: finalDescription || undefined,
+          status: editStatus as any,
+          priority: editPriority as any,
           assigneeId: editAssigneeId,
+          ...Object.fromEntries((editTemplateFields ?? []).map((field: any) => {
+            const key = String(field.key || '').replace(/[_-](.)/g, (_match, character) => String(character).toUpperCase());
+            return [key, editTemplateValues[field.key] ?? ''];
+          })),
         },
       });
       setEditingTicket(null);
@@ -253,8 +330,25 @@ export default function AgentHomeScreen() {
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My queue</Text>
           <Text style={[styles.sectionMeta, { color: colors.mutedForeground }]}>
-            {myTickets.length} total
+            {filteredMyTickets.length} shown
           </Text>
+        </View>
+
+        <View style={styles.filterRow}>
+          {(['all', 'active', 'open', 'pending', 'on_hold', 'solved', 'closed'] as const).map((filter) => (
+            <Pressable
+              key={filter}
+              onPress={() => setStatusFilter(filter)}
+              style={[
+                styles.filterChip,
+                { borderColor: colors.border, backgroundColor: statusFilter === filter ? colors.primary : colors.card },
+              ]}
+            >
+              <Text style={[styles.filterChipText, { color: statusFilter === filter ? colors.primaryForeground : colors.foreground }]}>
+                {filter === 'active' ? 'Active' : filter === 'on_hold' ? 'On Hold' : filter.charAt(0).toUpperCase() + filter.slice(1).replace('_', ' ')}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
         {agentsQuery.isError ? (
@@ -287,12 +381,13 @@ export default function AgentHomeScreen() {
               <Text style={[styles.retryText, { color: colors.secondaryForeground }]}>Retry</Text>
             </Pressable>
           </View>
-        ) : myTickets.length ? (
+        ) : filteredMyTickets.length ? (
           <View style={styles.ticketList}>
-            {myTickets.map((ticket) => (
+            {filteredMyTickets.map((ticket) => (
               <View key={ticket.id} style={[styles.ticketCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.ticketTopRow}>
                   <Text style={[styles.ticketId, { color: colors.primary }]}>#{ticket.id}</Text>
+                  <Text style={[styles.ticketOrg, { color: colors.mutedForeground }]} numberOfLines={1} ellipsizeMode="tail">{ticket.organization?.name ?? ''}</Text>
                   <Text style={[styles.ticketStatus, { color: colors.mutedForeground }]}>{ticket.status?.replace('_', ' ')}</Text>
                 </View>
                 <Text style={[styles.ticketSubject, { color: colors.foreground }]} numberOfLines={2}>{ticket.subject}</Text>
@@ -483,6 +578,42 @@ export default function AgentHomeScreen() {
               ))}
             </ScrollView>
 
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Template</Text>
+            {activeTemplates.length ? (
+              <View style={styles.chipRow}>
+                {activeTemplates.map((template) => (
+                  <Pressable
+                    key={template.id}
+                    onPress={() => applyEditTemplate(template)}
+                    style={[styles.chip, { borderColor: colors.border, backgroundColor: editTemplateId === template.id ? colors.primary : colors.card }]}
+                  >
+                    <Text style={[styles.chipText, { color: editTemplateId === template.id ? colors.primaryForeground : colors.foreground }]}>
+                      {template.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>No active templates available.</Text>
+            )}
+
+            {editTemplateFields && editTemplateFields.length ? (
+              <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}> 
+                {editTemplateFields.map((field) => (
+                  <View key={field.key} style={{ gap: 6 }}>
+                    <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>{field.label}{field.required ? ' *' : ''}</Text>
+                    <TextInput
+                      style={[styles.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                      value={editTemplateValues[field.key] ?? ''}
+                      onChangeText={(text) => setEditTemplateValues((current) => ({ ...current, [field.key]: text }))}
+                      placeholder={field.label}
+                      placeholderTextColor={colors.mutedForeground}
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Description</Text>
             <TextInput
               style={[styles.textInput, styles.textAreaInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
@@ -537,10 +668,14 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 18 },
   sectionMeta: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  filterChipText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   ticketList: { gap: 10 },
   ticketCard: { borderRadius: 8, borderWidth: 1, padding: 14 },
   ticketTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   ticketId: { fontFamily: 'Inter_700Bold', fontSize: 12 },
+  ticketOrg: { fontFamily: 'Inter_500Medium', fontSize: 11, textAlign: 'center', flex: 1 },
   ticketStatus: { fontFamily: 'Inter_500Medium', fontSize: 11, textTransform: 'capitalize' },
   ticketSubject: { fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 20 },
   ticketMeta: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 7, textTransform: 'capitalize' },
@@ -580,6 +715,7 @@ const styles = StyleSheet.create({
   inputLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12, marginTop: 8 },
   textInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter_400Regular', fontSize: 14 },
   textAreaInput: { height: 100, textAlignVertical: 'top' },
+  templateFieldGroup: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 4 },
   horizontalScrollRow: { gap: 8, paddingVertical: 4 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },

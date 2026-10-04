@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Custom fetch wrapper for generated API hooks.
  * Automatically injects internal JWT tokens and resolves base URLs for Web and Mobile builds.
  */
@@ -44,7 +44,9 @@ export const customFetch = async <T>(
 
   let fullUrl = url;
 
-  if (!url.startsWith("http")) {
+  const isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined";
+
+  if (!url.startsWith("http") && !isBrowser) {
     const storedBaseUrl =
       (globalThis as any).__API_BASE_URL__ ||
       (typeof window !== "undefined" && typeof window.localStorage !== "undefined" && window.localStorage.getItem("api_base_url")) ||
@@ -79,8 +81,10 @@ export const customFetch = async <T>(
   }
 
   // Retrieve token safely across both Web (localStorage) and React Native (globalThis)
-  const webToken = typeof window !== "undefined" && typeof window.localStorage !== "undefined" 
-    ? localStorage.getItem("auth_token") 
+  const webToken = typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+    ? localStorage.getItem("userToken") ||
+      localStorage.getItem("auth_token") ||
+      localStorage.getItem("token")
     : null;
   const nativeToken = (globalThis as any).__AUTH_TOKEN__;
   const token = webToken || nativeToken;
@@ -93,6 +97,7 @@ export const customFetch = async <T>(
   };
 
   if (token) {
+    // set the authorization header correctly
     headers["Authorization"] = `Bearer ${token}`;
     console.log("[customFetch] Authorization header added");
   }

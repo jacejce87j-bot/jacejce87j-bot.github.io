@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+﻿import { useCallback, useState } from 'react';
 import type { UppyFile } from '@uppy/core';
 
 interface UploadMetadata {
@@ -18,6 +18,13 @@ interface UseUploadOptions {
   basePath?: string;
   onSuccess?: (response: UploadResponse) => void;
   onError?: (error: Error) => void;
+}
+
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem('userToken')
+    ?? window.localStorage.getItem('userToken') ?? window.localStorage.getItem('auth_token') ?? window.localStorage.getItem('token')
+    ?? window.localStorage.getItem('token');
 }
 
 /**
@@ -61,10 +68,13 @@ export function useUpload(options: UseUploadOptions = {}) {
 
   const requestUploadUrl = useCallback(
     async (file: File): Promise<UploadResponse> => {
+      const token = getAuthToken();
+      // Fallback-presign (kept for compatibility)
       const response = await fetch(`${basePath}/uploads/request-url`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           name: file.name,
@@ -81,6 +91,39 @@ export function useUpload(options: UseUploadOptions = {}) {
       return response.json();
     },
     [],
+  );
+
+  const directUpload = useCallback(
+    async (file: File): Promise<UploadResponse> => {
+      // Read file as ArrayBuffer then convert to base64 for JSON transport
+      const buffer = await file.arrayBuffer();
+      // Convert to base64 string
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, Array.from(chunk) as unknown as number[]);
+      }
+      const base64 = typeof btoa === 'function' ? btoa(binary) : Buffer.from(bytes).toString('base64');
+
+      const token = getAuthToken();
+      const resp = await fetch(`${basePath}/uploads/direct`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || 'application/octet-stream', dataBase64: base64 }),
+      });
+
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Direct upload failed');
+      }
+      return resp.json();
+    },
+    [basePath],
   );
 
   const uploadToPresignedUrl = useCallback(
@@ -108,10 +151,9 @@ export function useUpload(options: UseUploadOptions = {}) {
 
       try {
         setProgress(10);
-        const uploadResponse = await requestUploadUrl(file);
-
-        setProgress(30);
-        await uploadToPresignedUrl(file, uploadResponse.uploadURL);
+        // Prefer direct DB-backed upload when available
+        setProgress(20);
+        const uploadResponse = await directUpload(file);
 
         setProgress(100);
         options.onSuccess?.(uploadResponse);
@@ -136,10 +178,12 @@ export function useUpload(options: UseUploadOptions = {}) {
       url: string;
       headers?: Record<string, string>;
     }> => {
+      const token = getAuthToken();
       const response = await fetch(`${basePath}/uploads/request-url`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           name: file.name,

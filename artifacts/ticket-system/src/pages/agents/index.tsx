@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,6 +35,38 @@ export default function AgentList() {
       onError: () => toast({ title: "Could not add agent", description: "Check the required fields and try again.", variant: "destructive" }),
     },
   });
+
+  const handleDeleteAgent = async (agentId: number) => {
+    const ok = window.confirm("Delete this agent?");
+    if (!ok) return;
+
+    try {
+      const response = await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error || "Could not delete agent");
+      }
+      queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });
+      toast({ title: "Agent deleted" });
+    } catch (error: any) {
+      toast({ title: "Delete failed", description: error?.message || "Could not delete this agent.", variant: "destructive" });
+    }
+  };
+
+  const handlePresenceChange = async (agentId: number, isOnline: boolean) => {
+    try {
+      const response = await fetch(`/api/agents/${agentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOnline }),
+      });
+      if (!response.ok) throw new Error("Could not update agent availability");
+      queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });
+      toast({ title: isOnline ? "Agent marked online" : "Agent marked offline" });
+    } catch (error) {
+      toast({ title: "Availability update failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+    }
+  };
 
   return (
     <AppLayout>
@@ -72,7 +104,7 @@ export default function AgentList() {
                   <div className="text-sm text-muted-foreground">{agent.email}</div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-border">
+                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-border gap-3">
                     <div className="text-sm">
                       <span className="text-muted-foreground mr-2">Role:</span>
                       <span className="font-medium capitalize">{agent.role}</span>
@@ -81,6 +113,14 @@ export default function AgentList() {
                       <span className="text-muted-foreground mr-2">Open Tickets:</span>
                       <span className="font-medium">{agent.openTicketCount || 0}</span>
                     </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button variant="outline" size="sm" className="mr-2" onClick={() => void handlePresenceChange(agent.id, !agent.isOnline)}>
+                      Mark {agent.isOnline ? "offline" : "online"}
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handleDeleteAgent(agent.id)}>
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

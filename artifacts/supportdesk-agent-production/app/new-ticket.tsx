@@ -4,6 +4,8 @@ import {
   getListTicketTemplatesQueryKey,
   TicketInput,
   useCreateTicket,
+  useListContacts,
+  useListOrganizations,
 } from '@workspace/api-client-react';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -29,6 +31,64 @@ const PRIORITIES: TicketInput['priority'][] = ['low', 'normal', 'high', 'urgent'
 const TYPES: TicketInput['type'][] = ['question', 'incident', 'problem', 'task'];
 const CHANNELS: TicketInput['channel'][] = ['web', 'email', 'chat', 'phone', 'api'];
 
+const normalizeTemplateFieldKey = (label: string) => {
+  const cleaned = String(label ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const aliases: Record<string, string> = {
+    'reg no': 'reg',
+    'reg number': 'reg',
+    registration: 'reg',
+    'vehicle registration': 'reg',
+    'vesa num': 'vesa',
+    'vesa number': 'vesa',
+    'vesa no': 'vesa',
+    her: 'hrs',
+    hour: 'hrs',
+    hours: 'hrs',
+    hrs: 'hrs',
+    'vehicle type': 'vehicleType',
+    'installation hours': 'hrs',
+  };
+
+  const normalized = cleaned.replace(/\s+/g, ' ');
+  return aliases[normalized] ?? normalized.replace(/\s+/g, '');
+};
+
+const inferTemplateFields = (template: any) => {
+  const explicitFields = Array.isArray(template?.fields) ? template.fields : [];
+  if (explicitFields.length) {
+    return explicitFields.map((field: any) => ({
+      ...field,
+      key: field.key || normalizeTemplateFieldKey(field.label || field.name || ''),
+      label: field.label || field.name || 'Field',
+    }));
+  }
+
+  const lines = String(template?.description ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const fields: any[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    const keyValueMatch = line.match(/^([^:]+):\s*(.*)$/);
+    const label = keyValueMatch ? keyValueMatch[1].trim() : line;
+    const canonicalKey = normalizeTemplateFieldKey(label);
+
+    if (!canonicalKey || seen.has(canonicalKey)) continue;
+
+    const value = keyValueMatch ? keyValueMatch[2].trim() : '';
+    const isMeaningful = label.length > 0 && (value.length > 0 || /reg|vesa|hrs|hours|address|phone|serial|model|account/i.test(label));
+    if (!isMeaningful) continue;
+
+    seen.add(canonicalKey);
+    fields.push({ key: canonicalKey, label, required: false });
+  }
+
+  return fields;
+};
+
 export default function NewTicketScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -42,12 +102,18 @@ export default function NewTicketScreen() {
   const [priority, setPriority] = useState<TicketInput['priority']>('normal');
   const [type, setType] = useState<TicketInput['type']>('question');
   const [channel, setChannel] = useState<TicketInput['channel']>('web');
+  const [requesterId, setRequesterId] = useState<number | null>(null);
+  const [organizationId, setOrganizationId] = useState<number | null>(null);
+  const [requesterSearch, setRequesterSearch] = useState('');
+  const [organizationSearch, setOrganizationSearch] = useState('');
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
   const [error, setError] = useState('');
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [templateFields, setTemplateFields] = useState<any[] | null>(null);
+  const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
   const [uploadError, setUploadError] = useState('');
 
   const agentsQuery = useListAgents({
@@ -63,6 +129,8 @@ export default function NewTicketScreen() {
       enabled: Boolean(isSignedIn),
     },
   });
+  const contactsQuery = useListContacts({ q: requesterSearch || undefined, limit: 25 });
+  const organizationsQuery = useListOrganizations({ q: organizationSearch || undefined, limit: 25 });
 
   const createTicket = useCreateTicket({
     mutation: {
@@ -144,6 +212,83 @@ export default function NewTicketScreen() {
           autoCapitalize="sentences"
         />
 
+        <Text style={[styles.label, { color: colors.foreground }]}>Requester *</Text>
+        <TextInput
+          value={requesterSearch}
+          onChangeText={(value) => {
+            setRequesterSearch(value);
+            setRequesterId(null);
+          }}
+          placeholder="Search requesters by name or email"
+          placeholderTextColor={colors.mutedForeground}
+          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+          autoCapitalize="none"
+          accessibilityLabel="Search requesters"
+        />
+        {requesterId === null ? (
+          <View style={styles.choices}>
+            {(contactsQuery.data?.data ?? []).map((contact) => (
+              <Pressable
+                key={contact.id}
+                onPress={() => {
+                  setRequesterId(contact.id);
+                  setRequesterSearch(`${contact.name} (${contact.email})`);
+                }}
+                style={[styles.choice, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Text style={[styles.choiceText, { color: colors.mutedForeground }]}>{contact.name} ({contact.email})</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {contactsQuery.isLoading ? <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Searching requesters…</Text> : null}
+        {!contactsQuery.isLoading && !contactsQuery.isError && contactsQuery.data?.data.length === 0 ? (
+          <Text style={[styles.helperText, { color: colors.mutedForeground }]}>No requesters found.</Text>
+        ) : null}
+        {contactsQuery.isError ? (
+          <Pressable onPress={() => void contactsQuery.refetch()} style={styles.retryLink}>
+            <Text style={[styles.retryLinkText, { color: colors.primary }]}>Requesters could not be loaded. Tap to retry.</Text>
+          </Pressable>
+        ) : null}
+
+        <Text style={[styles.label, { color: colors.foreground }]}>Organization *</Text>
+        <TextInput
+          value={organizationSearch}
+          onChangeText={(value) => {
+            setOrganizationSearch(value);
+            setOrganizationId(null);
+          }}
+          placeholder="Search organizations"
+          placeholderTextColor={colors.mutedForeground}
+          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+          accessibilityLabel="Search organizations"
+        />
+        {organizationId === null ? (
+          <View style={styles.choices}>
+            {(organizationsQuery.data?.data ?? []).map((organization) => (
+              <Pressable
+                key={organization.id}
+                onPress={() => {
+                  setOrganizationId(organization.id);
+                  setOrganizationSearch(organization.name);
+                }}
+                style={[styles.choice, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Text style={[styles.choiceText, { color: colors.mutedForeground }]}>{organization.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {organizationsQuery.isLoading ? <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Searching organizations…</Text> : null}
+        {!organizationsQuery.isLoading && !organizationsQuery.isError && organizationsQuery.data?.data.length === 0 ? (
+          <Text style={[styles.helperText, { color: colors.mutedForeground }]}>No organizations found.</Text>
+        ) : null}
+        {organizationsQuery.isError ? (
+          <Pressable onPress={() => void organizationsQuery.refetch()} style={styles.retryLink}>
+            <Text style={[styles.retryLinkText, { color: colors.primary }]}>Organizations could not be loaded. Tap to retry.</Text>
+          </Pressable>
+        ) : null}
+
         <Text style={[styles.label, { color: colors.foreground }]}>Description template</Text>
         {activeTemplates.length ? (
           <View style={styles.choices}>
@@ -153,8 +298,18 @@ export default function NewTicketScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${template.name} template`}
                 onPress={() => {
+                  const resolvedFields = inferTemplateFields(template);
                   setSelectedTemplateId(template.id);
-                  setDescription(template.description);
+                  if (resolvedFields.length) {
+                    setTemplateFields(resolvedFields);
+                    const vals: Record<string, string> = Object.fromEntries(resolvedFields.map((field: any) => [field.key, '']));
+                    setTemplateFieldValues(vals);
+                    setDescription('');
+                  } else {
+                    setTemplateFields(null);
+                    setTemplateFieldValues({});
+                    setDescription(template.description ?? '');
+                  }
                 }}
                 style={[
                   styles.choice,
@@ -192,6 +347,24 @@ export default function NewTicketScreen() {
         </Text>
 
         <Text style={[styles.label, { color: colors.foreground }]}>Description</Text>
+        {templateFields && templateFields.length ? (
+          <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>Template details</Text>
+            {templateFields.map((f) => (
+              <View key={f.key} style={{ marginBottom: 10 }}>
+                <Text style={[styles.label, { color: colors.foreground }]}>{f.label}{f.required ? ' *' : ''}</Text>
+                <TextInput
+                  value={templateFieldValues[f.key] ?? ''}
+                  onChangeText={(text) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: text }))}
+                  placeholder={f.label}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.input, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
+                />
+              </View>
+            ))}
+            <Text style={[styles.helperText, { color: colors.mutedForeground, marginTop: -6 }]}>These fields come from the selected template. They will be combined into the description on submit.</Text>
+          </View>
+        ) : null}
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -289,14 +462,31 @@ export default function NewTicketScreen() {
           disabled={!canSubmit}
           onPress={() => {
             setError('');
+            if (requesterId === null || organizationId === null) {
+              setError('Select both a requester and an organization before creating the ticket.');
+              return;
+            }
+            let finalDescription = description.trim();
+            if (templateFields && templateFields.length) {
+              const missing = templateFields.filter((f) => f.required && !(templateFieldValues[f.key]?.trim()));
+              if (missing.length) {
+                setError(`Please fill required fields: ${missing.map((m) => m.label).join(', ')}`);
+                return;
+              }
+              const built = templateFields.map((f) => `${f.label}: ${templateFieldValues[f.key] ?? ''}`).join('\n');
+              finalDescription = [built, description.trim()].filter(Boolean).join('\n\n');
+            }
+
             createTicket.mutate({
               data: {
                 subject: subject.trim(),
-                description: description.trim() || undefined,
+                description: finalDescription || undefined,
                 status: 'open',
                 priority,
                 type,
                 channel,
+                requesterId,
+                organizationId,
                 assigneeId,
                 attachments,
               },
@@ -365,6 +555,7 @@ const styles = StyleSheet.create({
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   choice: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
   choiceText: { fontFamily: 'Inter_500Medium', fontSize: 12, textTransform: 'capitalize' },
+  templateFieldGroup: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 6 },
   attachmentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   attachmentLabel: { marginBottom: 0 },
   attachButton: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 8 },

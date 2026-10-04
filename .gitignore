@@ -11,6 +11,16 @@ out-tsc
 # dependencies
 node_modules
 
+# local and deployment environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
 # IDEs and editors
 /.idea
 .project
@@ -47,3 +57,14 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# deployment safety — don't push binaries/backups
+*.zip
+*.mp4
+*.pdf
+*.bak-*
+*.7z
+APK/
+backups/
+artifacts-backup-*/
+Zendesk-Salesforce/

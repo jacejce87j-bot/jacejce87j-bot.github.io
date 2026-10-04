@@ -97,10 +97,13 @@ export function useNotifications() {
   const connect = useCallback(() => {
     if (unmounted.current) return;
 
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${window.location.host}/ws`;
+    const configuredApiUrl = import.meta.env.VITE_WS_URL;
+    const wsUrl = new URL("/ws", configuredApiUrl || window.location.origin);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    const token = localStorage.getItem("userToken") || localStorage.getItem("auth_token") || localStorage.getItem("token");
+    if (token) wsUrl.searchParams.set("token", token);
 
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

@@ -3,6 +3,7 @@ import { agentsTable, db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { type NextFunction, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
+import { JWT_SECRET } from "../lib/jwt-secret";
 
 declare global {
   namespace Express {
@@ -19,7 +20,9 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "internal-whiteboard-secret-key";
+function normalizeRole(value: unknown): string {
+  return String(value ?? "admin").trim().toLowerCase();
+}
 
 interface JWTPayload {
   id: string;
@@ -45,24 +48,21 @@ export async function authMiddleware(
   } as Request["isAuthenticated"];
 
   const authHeader = req.headers.authorization;
-  console.log(`[authMiddleware] ${req.method} ${req.url} - Authorization header: ${authHeader ? "present" : "missing"}`);
-  
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    console.log("[authMiddleware] No Bearer token found, skipping auth");
+  const queryToken = typeof req.query?.token === "string" ? req.query.token :
+    typeof req.query?.auth_token === "string" ? req.query.auth_token :
+    typeof req.query?.authToken === "string" ? req.query.authToken : null;
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+  const token = bearerToken || queryToken;
+
+  if (!token) {
     next();
     return;
   }
 
-  const token = authHeader.split(" ")[1];
-  console.log("[authMiddleware] Token found, verifying...");
-
   try {
-    // 1. Verify standard internal JWT
     const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
-    console.log("[authMiddleware] Token verified:", decoded);
 
     if (!decoded || !decoded.id) {
-      console.log("[authMiddleware] Invalid token payload");
       next();
       return;
     }
@@ -75,12 +75,10 @@ export async function authMiddleware(
       profileImageUrl: decoded.profileImageUrl ?? null,
     };
 
-    console.log("[authMiddleware] Upserting user:", identity.email);
-
-    // 2. Upsert local SupportDesk user row
+    const safeRole = normalizeRole(decoded.role ?? "admin");
     const [dbUser] = await db
       .insert(usersTable)
-      .values({ ...identity, role: (decoded.role as any) ?? "admin" })
+      .values({ ...identity, role: safeRole })
       .onConflictDoUpdate({
         target: usersTable.id,
         set: {
@@ -88,19 +86,16 @@ export async function authMiddleware(
           firstName: identity.firstName,
           lastName: identity.lastName,
           profileImageUrl: identity.profileImageUrl,
+          role: safeRole,
           updatedAt: new Date(),
         },
       })
       .returning();
 
-    console.log("[authMiddleware] User upserted:", dbUser.email);
-
-    // 3. Attach user context to Request
-    // Normalize role to the API enum ['agent','admin','supervisor']
     const VALID_ROLES = ["agent", "admin", "supervisor"] as const;
-    let normalizedRole = (dbUser.role ?? "admin") as string;
+    let normalizedRole = normalizeRole(dbUser.role ?? safeRole);
     if (!VALID_ROLES.includes(normalizedRole as any)) {
-      normalizedRole = "admin";
+      normalizedRole = ["agent", "admin", "supervisor"].includes(safeRole) ? safeRole : "admin";
     }
 
     req.user = {
@@ -112,17 +107,13 @@ export async function authMiddleware(
       role: normalizedRole as AuthUser["role"],
     };
 
-    console.log("[authMiddleware] User attached to request:", req.user.email);
-
-    // 4. Update online agent status
     if (identity.email) {
       await db
         .update(agentsTable)
         .set({ isOnline: true })
         .where(eq(agentsTable.email, identity.email));
     }
-  } catch (err) {
-    console.error("[authMiddleware] Error verifying token:", err);
+  } catch (_err) {
     // If token is invalid or expired, proceed unauthenticated (user = undefined)
   }
 

@@ -912,6 +912,40 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TicketAttachment"
+        client:
+          type: ["string", "null"]
+        fleetNum:
+          type: ["string", "null"]
+        reg:
+          type: ["string", "null"]
+        vin:
+          type: ["string", "null"]
+        engine:
+          type: ["string", "null"]
+        make:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        colour:
+          type: ["string", "null"]
+        odo:
+          type: ["string", "null"]
+        deviceId:
+          type: ["string", "null"]
+        deviceCellNo:
+          type: ["string", "null"]
+        deviceType:
+          type: ["string", "null"]
+        trackingImei:
+          type: ["string", "null"]
+        trackingCellNum:
+          type: ["string", "null"]
+        trackingType:
+          type: ["string", "null"]
+        vesaNum:
+          type: ["string", "null"]
+        hours:
+          type: ["string", "null"]
         commentCount:
           type: integer
         createdAt:
@@ -964,6 +998,40 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TicketAttachment"
+        client:
+          type: ["string", "null"]
+        fleetNum:
+          type: ["string", "null"]
+        reg:
+          type: ["string", "null"]
+        vin:
+          type: ["string", "null"]
+        engine:
+          type: ["string", "null"]
+        make:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        colour:
+          type: ["string", "null"]
+        odo:
+          type: ["string", "null"]
+        deviceId:
+          type: ["string", "null"]
+        deviceCellNo:
+          type: ["string", "null"]
+        deviceType:
+          type: ["string", "null"]
+        trackingImei:
+          type: ["string", "null"]
+        trackingCellNum:
+          type: ["string", "null"]
+        trackingType:
+          type: ["string", "null"]
+        vesaNum:
+          type: ["string", "null"]
+        hours:
+          type: ["string", "null"]
 
     TicketUpdate:
       type: object
@@ -1003,6 +1071,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TicketAttachment"
+        vesaNum:
+          type: ["string", "null"]
+        hours:
+          type: ["string", "null"]
 
     TicketAttachment:
       type: object

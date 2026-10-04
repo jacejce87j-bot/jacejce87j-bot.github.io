@@ -60,4 +60,18 @@ router.patch("/:id", async (req, res) => {
   res.json({ ...agent, createdAt: agent.createdAt.toISOString() });
 });
 
+router.delete(":id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: "Invalid agent id" });
+  }
+
+  const [deleted] = await db.delete(agentsTable).where(eq(agentsTable.id, id)).returning({ id: agentsTable.id });
+  if (!deleted) {
+    return res.status(404).json({ error: "Agent not found" });
+  }
+
+  res.status(204).send();
+});
+
 export default router;

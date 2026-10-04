@@ -32,18 +32,15 @@ export function GoogleAuthButton({ onError }: Props) {
     onError('');
 
     try {
-      // 1. Construct redirect URI back to the application
       const redirectUri = AuthSession.makeRedirectUri({
         scheme: 'supportdesk',
         path: 'auth/callback',
       });
 
-      // 2. Open WebBrowser session pointing to your custom Express Google Auth endpoint
       const authUrl = `${baseUrl}/api/auth/google?redirect_uri=${encodeURIComponent(redirectUri)}`;
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
 
       if (result.type === 'success' && result.url) {
-        // 3. Extract parameters/tokens returned from Express backend redirect
         const parsedUrl = new URL(result.url);
         const token = parsedUrl.searchParams.get('token');
         const errorParam = parsedUrl.searchParams.get('error');
@@ -71,13 +68,11 @@ export function GoogleAuthButton({ onError }: Props) {
           throw new Error('Authentication succeeded but no access token was returned.');
         }
       } else if (result.type === 'dismiss' || result.type === 'cancel') {
-        // User intentionally closed or cancelled the browser flow
         setIsLoading(false);
       } else {
         throw new Error('Google authentication was cancelled or failed.');
       }
     } catch (error) {
-      console.error('Google Auth Error:', error);
       const message =
         error instanceof Error ? error.message : 'Google sign-in could not be completed.';
       onError(message);
@@ -117,7 +112,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
-    justify: 'center',
+    justifyContent: 'center',
     flexDirection: 'row',
     gap: 10,
     marginTop: 14,

@@ -108,13 +108,30 @@ export const ListTicketsResponse = zod.object({
   "objectPath": zod.string(),
   "uploadedAt": zod.string()
 })).optional(),
-  "commentCount": zod.number().optional(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
+"client": zod.string().nullish(),
+"fleetNum": zod.string().nullish(),
+"reg": zod.string().nullish(),
+"vin": zod.string().nullish(),
+"engine": zod.string().nullish(),
+"make": zod.string().nullish(),
+"model": zod.string().nullish(),
+"colour": zod.string().nullish(),
+"odo": zod.string().nullish(),
+"deviceId": zod.string().nullish(),
+"deviceCellNo": zod.string().nullish(),
+"deviceType": zod.string().nullish(),
+"trackingImei": zod.string().nullish(),
+"trackingCellNum": zod.string().nullish(),
+"trackingType": zod.string().nullish(),
+"vesaNum": zod.string().nullish(),
+"hours": zod.string().nullish(),
+"commentCount": zod.number().optional(),
+"createdAt": zod.string(),
+"updatedAt": zod.string()
 })),
-  "total": zod.number(),
-  "page": zod.number(),
-  "limit": zod.number()
+"total": zod.number(),
+"page": zod.number(),
+"limit": zod.number()
 })
 
 
@@ -136,6 +153,23 @@ export const CreateTicketBody = zod.object({
   "organizationId": zod.number().nullish(),
   "tags": zod.array(zod.string()).optional(),
   "dueAt": zod.string().nullish(),
+  "client": zod.string().nullish(),
+  "fleetNum": zod.string().nullish(),
+  "reg": zod.string().nullish(),
+  "vin": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "colour": zod.string().nullish(),
+  "odo": zod.string().nullish(),
+  "deviceId": zod.string().nullish(),
+  "deviceCellNo": zod.string().nullish(),
+  "deviceType": zod.string().nullish(),
+  "trackingImei": zod.string().nullish(),
+  "trackingCellNum": zod.string().nullish(),
+  "trackingType": zod.string().nullish(),
+  "vesaNum": zod.string().nullish(),
+  "hours": zod.string().nullish(),
   "attachments": zod.array(zod.object({
   "name": zod.string(),
   "size": zod.number(),
@@ -224,6 +258,21 @@ export const GetTicketResponse = zod.object({
   "objectPath": zod.string(),
   "uploadedAt": zod.string()
 })).optional(),
+  "client": zod.string().nullish(),
+  "fleetNum": zod.string().nullish(),
+  "reg": zod.string().nullish(),
+  "vin": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "colour": zod.string().nullish(),
+  "odo": zod.string().nullish(),
+  "deviceId": zod.string().nullish(),
+  "deviceCellNo": zod.string().nullish(),
+  "deviceType": zod.string().nullish(),
+  "trackingImei": zod.string().nullish(),
+  "trackingCellNum": zod.string().nullish(),
+  "trackingType": zod.string().nullish(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -253,6 +302,23 @@ export const UpdateTicketBody = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "dueAt": zod.string().nullish(),
   "satisfaction": zod.string().nullish(),
+  "client": zod.string().nullish(),
+  "fleetNum": zod.string().nullish(),
+  "reg": zod.string().nullish(),
+  "vin": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "colour": zod.string().nullish(),
+  "odo": zod.string().nullish(),
+  "deviceId": zod.string().nullish(),
+  "deviceCellNo": zod.string().nullish(),
+  "deviceType": zod.string().nullish(),
+  "trackingImei": zod.string().nullish(),
+  "trackingCellNum": zod.string().nullish(),
+  "trackingType": zod.string().nullish(),
+  "vesaNum": zod.string().nullish(),
+  "hours": zod.string().nullish(),
   "attachments": zod.array(zod.object({
   "name": zod.string(),
   "size": zod.number(),
@@ -333,6 +399,21 @@ export const UpdateTicketResponse = zod.object({
   "objectPath": zod.string(),
   "uploadedAt": zod.string()
 })).optional(),
+  "client": zod.string().nullish(),
+  "fleetNum": zod.string().nullish(),
+  "reg": zod.string().nullish(),
+  "vin": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "colour": zod.string().nullish(),
+  "odo": zod.string().nullish(),
+  "deviceId": zod.string().nullish(),
+  "deviceCellNo": zod.string().nullish(),
+  "deviceType": zod.string().nullish(),
+  "trackingImei": zod.string().nullish(),
+  "trackingCellNum": zod.string().nullish(),
+  "trackingType": zod.string().nullish(),
   "commentCount": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1068,6 +1149,12 @@ export const ListTicketTemplatesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "description": zod.string(),
+  "fields": zod.array(zod.object({
+    "key": zod.string(),
+    "label": zod.string(),
+    "required": zod.boolean().optional(),
+    "type": zod.enum(['text','number','phone']).optional()
+  })).optional(),
   "isActive": zod.boolean(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1085,6 +1172,12 @@ export const ListTicketTemplatesResponse = zod.array(ListTicketTemplatesResponse
 export const CreateTicketTemplateBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string().min(1),
+  "fields": zod.array(zod.object({
+    "key": zod.string(),
+    "label": zod.string(),
+    "required": zod.boolean().optional(),
+    "type": zod.enum(['text','number','phone']).optional()
+  })).optional(),
   "isActive": zod.boolean().optional()
 })
 
@@ -1103,6 +1196,12 @@ export const UpdateTicketTemplateParams = zod.object({
 export const UpdateTicketTemplateBody = zod.object({
   "name": zod.string().min(1).optional(),
   "description": zod.string().min(1).optional(),
+  "fields": zod.array(zod.object({
+    "key": zod.string(),
+    "label": zod.string(),
+    "required": zod.boolean().optional(),
+    "type": zod.enum(['text','number','phone']).optional()
+  })).optional(),
   "isActive": zod.boolean().optional()
 })
 
@@ -1110,6 +1209,12 @@ export const UpdateTicketTemplateResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "description": zod.string(),
+  "fields": zod.array(zod.object({
+    "key": zod.string(),
+    "label": zod.string(),
+    "required": zod.boolean().optional(),
+    "type": zod.enum(['text','number','phone']).optional()
+  })).optional(),
   "isActive": zod.boolean(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1153,5 +1258,3 @@ export const BeginBrowserLoginQueryParams = zod.object({
 export const LogoutBrowserSessionQueryParams = zod.object({
   "returnTo": zod.coerce.string().optional()
 })
-
-

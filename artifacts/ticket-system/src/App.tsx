@@ -12,6 +12,15 @@ import OrganizationList from "@/pages/organizations/index";
 import AgentList from "@/pages/agents/index";
 import Settings from "@/pages/settings";
 import Users from "@/pages/users/index";
+import DeviceTypesPage from "@/pages/devicetypes";
+import Reports from "@/pages/reports";
+import OrganizationReports from "@/pages/reports/organizations";
+import HealthReportPage from "@/pages/reports/health";
+import SlaReports from "@/pages/reports/sla";
+import AgentKpisReport from "@/pages/reports/agent-kpis";
+import ReportBuilder from "@/pages/reports/builder";
+import TicketDetailsReport from "@/pages/reports/ticket-details";
+import KnowledgeBasePage from "@/pages/knowledge-base";
 import TicketDetail from "@/pages/tickets/[id]";
 import NewTicket from "@/pages/tickets/new";
 import ContactDetail from "@/pages/contacts/[id]";
@@ -66,6 +75,16 @@ function AppRoutes() {
       <Route path="/contacts" component={ContactList} />
       <Route path="/contacts/:id" component={ContactDetail} />
       <Route path="/users" component={Users} />
+      <Route path="/devicetypes" component={DeviceTypesPage} />
+      <Route path="/reports" component={Reports} />
+      <Route path="/reports/organizations" component={OrganizationReports} />
+      <Route path="/reports/builder" component={ReportBuilder} />
+      <Route path="/reports/ticket-details" component={TicketDetailsReport} />
+      <Route path="/reports/health" component={HealthReportPage} />
+      <Route path="/reports/sla" component={SlaReports} />
+      <Route path="/reports/agent-kpis" component={AgentKpisReport} />
+      <Route path="/knowledge-base/:id" component={KnowledgeBasePage} />
+      <Route path="/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/organizations" component={OrganizationList} />
       <Route path="/organizations/:id" component={OrganizationDetail} />
       <Route path="/agents" component={AgentList} />

@@ -77,6 +77,8 @@
   "dependencies": {
     "@clerk/react": "^6.12.10",
     "@clerk/themes": "^2.4.57",
-    "@workspace/object-storage-web": "workspace:*"
+    "@workspace/object-storage-web": "workspace:*",
+    "jspdf": "^4.2.1",
+    "xlsx": "^0.18.5"
   }
 }

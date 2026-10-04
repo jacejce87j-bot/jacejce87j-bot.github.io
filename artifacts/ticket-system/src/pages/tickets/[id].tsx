@@ -10,6 +10,7 @@ import {
   useCreateTicketComment,
   getListTicketsQueryKey,
   useListAgents,
+  useListContacts,
   type TicketAttachment,
 } from "@workspace/api-client-react";
 import { useUpload } from "@workspace/object-storage-web";
@@ -18,19 +19,27 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils";
-import { ArrowLeft, Clock, Send, CheckCircle2, Lock, Globe, GitMerge, ArrowRight, Paperclip, FileText, Download } from "lucide-react";
+import { ArrowLeft, Clock, Send, CheckCircle2, Lock, Globe, GitMerge, ArrowRight, Paperclip, FileText, Download, BookOpen } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MergeTicketDialog } from "@/components/merge-ticket-dialog";
+import { getMentionCandidates, replaceLastMention } from "@/lib/mentions";
+import { MacroSelector } from "@/components/macro-selector";
+import { useSupportUser } from "@/hooks/use-support-user";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
+  const [, setLocation] = useLocation();
   const ticketId = params?.id ? parseInt(params.id) : 0;
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useSupportUser();
   
   const { data: ticket, isLoading: isLoadingTicket } = useGetTicket(ticketId, {
     query: {
@@ -45,6 +54,8 @@ export default function TicketDetail() {
       queryKey: getListTicketCommentsQueryKey(ticketId)
     }
   });
+  const contactsQuery = useListContacts({ limit: 200 });
+  const contacts = Array.isArray(contactsQuery.data?.data) ? contactsQuery.data.data : [];
   const agentsQuery = useListAgents();
 
   const updateTicket = useUpdateTicket({
@@ -72,7 +83,13 @@ export default function TicketDetail() {
   const [isInternal, setIsInternal] = useState(false);
   const [commentAttachments, setCommentAttachments] = useState<TicketAttachment[]>([]);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [kbaDialogOpen, setKbaDialogOpen] = useState(false);
+  const [kbaTitle, setKbaTitle] = useState("");
+  const [kbaSummary, setKbaSummary] = useState("");
+  const [kbaContent, setKbaContent] = useState("");
+  const [isCreatingKba, setIsCreatingKba] = useState(false);
   const [isSavingAttachment, setIsSavingAttachment] = useState(false);
+  const mentionSuggestions = getMentionCandidates(newComment, contacts);
 
   const { uploadFile, isUploading } = useUpload({
     onError: (error) => toast({ title: "Upload failed", description: error.message, variant: "destructive" }),
@@ -122,6 +139,53 @@ export default function TicketDetail() {
     ]);
   };
 
+  const openKbaDialog = () => {
+    const publicReplies = Array.isArray(comments)
+      ? comments.filter((comment) => comment.isPublic && comment.body.trim()).map((comment) => comment.body.trim())
+      : [];
+    setKbaTitle(ticket?.subject ?? "");
+    setKbaSummary("");
+    setKbaContent([ticket?.description?.trim(), ...publicReplies].filter(Boolean).join("\n\n"));
+    setKbaDialogOpen(true);
+  };
+
+  const createKbaFromTicket = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsCreatingKba(true);
+    try {
+      const token = localStorage.getItem("userToken") || localStorage.getItem("auth_token") || localStorage.getItem("token");
+      const response = await fetch("/api/knowledge-base/from-ticket", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          sourceTicketId: ticketId,
+          title: kbaTitle,
+          summary: kbaSummary,
+          content: kbaContent,
+          tags: ticket?.tags ?? [],
+          status: "draft",
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error ?? `Unable to create article (${response.status})`);
+      setKbaDialogOpen(false);
+      toast({ title: "Knowledge article draft created" });
+      setLocation(`/knowledge-base/${payload.id}`);
+    } catch (error) {
+      toast({
+        title: "Unable to create knowledge article",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingKba(false);
+    }
+  };
+
   const handleAttachment = async (file: File) => {
     if (!ticket) return;
     setIsSavingAttachment(true);
@@ -149,7 +213,8 @@ export default function TicketDetail() {
 
   const attachmentUrl = (objectPath: string) => {
     const relativePath = objectPath.replace(/^\/objects\//, "");
-    return `/api/storage/objects/${relativePath}`;
+    const token = localStorage.getItem("userToken") || localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
+    return token ? `/api/storage/objects/${relativePath}?token=${encodeURIComponent(token)}` : `/api/storage/objects/${relativePath}`;
   };
 
   const formatFileSize = (size: number) => {
@@ -198,6 +263,9 @@ export default function TicketDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={openKbaDialog}>
+              <BookOpen className="mr-2 h-4 w-4" /> Create KBA
+            </Button>
             {ticket.status !== 'solved' && ticket.status !== 'closed' && !ticket.mergedIntoId && (
               <>
                 <Button
@@ -214,6 +282,35 @@ export default function TicketDetail() {
             )}
           </div>
         </div>
+
+        <Dialog open={kbaDialogOpen} onOpenChange={setKbaDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create knowledge article from ticket #{ticket.id}</DialogTitle>
+              <DialogDescription>
+                Review and edit the draft before saving. Only the ticket description and public replies are included; internal notes are excluded.
+              </DialogDescription>
+            </DialogHeader>
+            <form className="space-y-4" onSubmit={createKbaFromTicket}>
+              <div className="space-y-2">
+                <Label htmlFor="ticket-kba-title">Title</Label>
+                <Input id="ticket-kba-title" required maxLength={200} value={kbaTitle} onChange={(event) => setKbaTitle(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ticket-kba-summary">Summary</Label>
+                <Input id="ticket-kba-summary" maxLength={500} value={kbaSummary} onChange={(event) => setKbaSummary(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ticket-kba-content">Article content</Label>
+                <Textarea id="ticket-kba-content" className="min-h-56" required maxLength={50000} value={kbaContent} onChange={(event) => setKbaContent(event.target.value)} />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setKbaDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={isCreatingKba}>{isCreatingKba ? "Creating..." : "Save as draft"}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Merged-into banner */}
         {ticket.mergedIntoId && (
@@ -387,12 +484,38 @@ export default function TicketDetail() {
                     </button>
                   </div>
                   <div className={`p-4 ${isInternal ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : ''}`}>
-                    <Textarea 
-                      placeholder={isInternal ? "Add an internal note (only visible to agents)..." : "Type your reply to the customer..."}
-                      className={`min-h-[120px] resize-y ${isInternal ? 'border-yellow-200 focus-visible:ring-yellow-500 dark:border-yellow-900/50' : ''}`}
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                    />
+                    <div className="space-y-2">
+                      <Textarea 
+                        placeholder={isInternal ? "Add an internal note (only visible to agents)... @name or @email" : "Type your reply to the customer... @name or @email"}
+                        className={`min-h-[120px] resize-y ${isInternal ? 'border-yellow-200 focus-visible:ring-yellow-500 dark:border-yellow-900/50' : ''}`}
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                      />
+                      <MacroSelector
+                        scope={isInternal ? "internal_comment" : "public_comment"}
+                        context={{ ticket, user }}
+                        ticketId={ticketId}
+                        userId={user?.id}
+                        onInsert={(content) => setNewComment((current) => current ? `${current}\n\n${content}` : content)}
+                      />
+                      {mentionSuggestions.length > 0 && (
+                        <div className="rounded-md border bg-muted/20 p-2">
+                          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Mention a contact</p>
+                          <div className="flex flex-wrap gap-2">
+                            {mentionSuggestions.map((contact) => (
+                              <button
+                                key={contact.id}
+                                type="button"
+                                className="rounded-full border bg-background px-2.5 py-1 text-xs hover:bg-accent"
+                                onClick={() => setNewComment((current) => replaceLastMention(current, contact))}
+                              >
+                                {contact.name} · {contact.email}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     {commentAttachments.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {commentAttachments.map((attachment, index) => (
@@ -495,6 +618,35 @@ export default function TicketDetail() {
                   <span className="text-sm text-muted-foreground">Channel</span>
                   <div className="col-span-2 text-sm capitalize">{ticket.channel}</div>
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-4 border-t border-border">
+              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Template installation details</h3>
+              <div className="space-y-2">
+                {[
+                  ["Fleet Num", ticket.fleetNum],
+                  ["Reg", ticket.reg],
+                  ["VIN", ticket.vin],
+                  ["Engine", ticket.engine],
+                  ["Make", ticket.make],
+                  ["Model", ticket.model],
+                  ["Colour", ticket.colour],
+                  ["ODO", ticket.odo],
+                  ["Device ID", ticket.deviceId],
+                  ["Device Cell No", ticket.deviceCellNo],
+                  ["Device Type", ticket.deviceType],
+                  ["Tracking IMEI", ticket.trackingImei],
+                  ["Tracking Cell Num", ticket.trackingCellNum],
+                  ["Tracking Type", ticket.trackingType],
+                  ["VESA NUM", ticket.vesaNum],
+                  ["HOURS", ticket.hours],
+                ].map(([label, value]) => value ? (
+                  <div key={label} className="grid grid-cols-2 gap-2 text-sm">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-medium break-words">{value}</span>
+                  </div>
+                ) : null)}
               </div>
             </div>
 

@@ -74,6 +74,14 @@ export default function SignInScreen() {
           } catch (e) {}
         }
 
+        // Additional debug: ensure global token is set and log it so we can verify in Metro logs
+        try {
+          (globalThis as any).__AUTH_TOKEN__ = data.token;
+          console.log('[Auth] Stored token on globalThis and local storage');
+        } catch (e) {
+          console.warn('[Auth] Failed to set global token', e);
+        }
+
         // Navigate to main workspace upon successful login
         router.replace('/(tabs)');
       } else {

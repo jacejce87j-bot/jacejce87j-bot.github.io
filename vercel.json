@@ -1,0 +1,15 @@
+{
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @workspace/ticket-system build",
+  "outputDirectory": "artifacts/ticket-system/dist",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://your-supportdesk-api.onrender.com/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

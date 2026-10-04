@@ -165,6 +165,23 @@ export interface Ticket {
   /** @nullable */
   mergedIntoId?: number | null;
   attachments?: TicketAttachment[];
+  client?: string | null;
+  fleetNum?: string | null;
+  reg?: string | null;
+  vin?: string | null;
+  engine?: string | null;
+  make?: string | null;
+  model?: string | null;
+  colour?: string | null;
+  odo?: string | null;
+  deviceId?: string | null;
+  deviceCellNo?: string | null;
+  deviceType?: string | null;
+  trackingImei?: string | null;
+  trackingCellNum?: string | null;
+  trackingType?: string | null;
+  vesaNum?: string | null;
+  hours?: string | null;
   commentCount?: number;
   createdAt: string;
   updatedAt: string;
@@ -234,6 +251,23 @@ export interface TicketInput {
   tags?: string[];
   /** @nullable */
   dueAt?: string | null;
+  client?: string | null;
+  fleetNum?: string | null;
+  reg?: string | null;
+  vin?: string | null;
+  engine?: string | null;
+  make?: string | null;
+  model?: string | null;
+  colour?: string | null;
+  odo?: string | null;
+  deviceId?: string | null;
+  deviceCellNo?: string | null;
+  deviceType?: string | null;
+  trackingImei?: string | null;
+  trackingCellNum?: string | null;
+  trackingType?: string | null;
+  vesaNum?: string | null;
+  hours?: string | null;
   attachments?: TicketAttachment[];
 }
 
@@ -298,13 +332,39 @@ export interface TicketUpdate {
   dueAt?: string | null;
   /** @nullable */
   satisfaction?: string | null;
+  client?: string | null;
+  fleetNum?: string | null;
+  reg?: string | null;
+  vin?: string | null;
+  engine?: string | null;
+  make?: string | null;
+  model?: string | null;
+  colour?: string | null;
+  odo?: string | null;
+  deviceId?: string | null;
+  deviceCellNo?: string | null;
+  deviceType?: string | null;
+  trackingImei?: string | null;
+  trackingCellNum?: string | null;
+  trackingType?: string | null;
+  vesaNum?: string | null;
+  hours?: string | null;
   attachments?: TicketAttachment[];
+}
+
+export interface TemplateField {
+  key: string;
+  label: string;
+  required?: boolean;
+  type?: 'text' | 'number' | 'phone';
+  value?: string;
 }
 
 export interface TicketTemplate {
   id: number;
   name: string;
   description: string;
+  fields?: TemplateField[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -315,6 +375,7 @@ export interface TicketTemplateInput {
   name: string;
   /** @minLength 1 */
   description: string;
+  fields?: TemplateField[];
   isActive?: boolean;
 }
 
@@ -323,6 +384,7 @@ export interface TicketTemplateUpdate {
   name?: string;
   /** @minLength 1 */
   description?: string;
+  fields?: TemplateField[];
   isActive?: boolean;
 }
 
@@ -716,4 +778,3 @@ returnTo?: string;
 export type LogoutBrowserSessionParams = {
 returnTo?: string;
 };
-

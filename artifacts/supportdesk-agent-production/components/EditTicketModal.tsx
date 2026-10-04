@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   View,
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
+import { getListTicketTemplatesQueryKey, useListTicketTemplates } from '@workspace/api-client-react';
 
 interface EditTicketModalProps {
   visible: boolean;
@@ -26,6 +27,64 @@ interface EditTicketModalProps {
   onSave: (updatedTicket: any) => void;
 }
 
+const normalizeTemplateFieldKey = (label: string) => {
+  const cleaned = String(label ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const aliases: Record<string, string> = {
+    'reg no': 'reg',
+    'reg number': 'reg',
+    registration: 'reg',
+    'vehicle registration': 'reg',
+    'vesa num': 'vesa',
+    'vesa number': 'vesa',
+    'vesa no': 'vesa',
+    her: 'hrs',
+    hour: 'hrs',
+    hours: 'hrs',
+    hrs: 'hrs',
+    'vehicle type': 'vehicleType',
+    'installation hours': 'hrs',
+  };
+
+  const normalized = cleaned.replace(/\s+/g, ' ');
+  return aliases[normalized] ?? normalized.replace(/\s+/g, '');
+};
+
+const inferTemplateFields = (template: any) => {
+  const explicitFields = Array.isArray(template?.fields) ? template.fields : [];
+  if (explicitFields.length) {
+    return explicitFields.map((field: any) => ({
+      ...field,
+      key: field.key || normalizeTemplateFieldKey(field.label || field.name || ''),
+      label: field.label || field.name || 'Field',
+    }));
+  }
+
+  const lines = String(template?.description ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const fields: any[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    const keyValueMatch = line.match(/^([^:]+):\s*(.*)$/);
+    const label = keyValueMatch ? keyValueMatch[1].trim() : line;
+    const canonicalKey = normalizeTemplateFieldKey(label);
+
+    if (!canonicalKey || seen.has(canonicalKey)) continue;
+
+    const value = keyValueMatch ? keyValueMatch[2].trim() : '';
+    const isMeaningful = label.length > 0 && (value.length > 0 || /reg|vesa|hrs|hours|address|phone|serial|model|account/i.test(label));
+    if (!isMeaningful) continue;
+
+    seen.add(canonicalKey);
+    fields.push({ key: canonicalKey, label, required: false });
+  }
+
+  return fields;
+};
+
 export function EditTicketModal({ visible, ticket, agents, onClose, onSave }: EditTicketModalProps) {
   if (!ticket) return null;
 
@@ -35,10 +94,62 @@ export function EditTicketModal({ visible, ticket, agents, onClose, onSave }: Ed
   const [priority, setPriority] = useState(ticket.priority);
   const [assigneeId, setAssigneeId] = useState<number | null>(ticket.assigneeId);
   const [saving, setSaving] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [templateFields, setTemplateFields] = useState<any[] | null>(null);
+  const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
+
+  const templatesQuery = useListTicketTemplates({
+    query: {
+      queryKey: getListTicketTemplatesQueryKey(),
+    },
+  });
+
+  useEffect(() => {
+    setSubject(ticket.subject);
+    setDescription(ticket.description);
+    setStatus(ticket.status);
+    setPriority(ticket.priority);
+    setAssigneeId(ticket.assigneeId);
+    setSelectedTemplateId(null);
+    setTemplateFields(null);
+    setTemplateFieldValues({});
+  }, [ticket.id, ticket.subject, ticket.description, ticket.status, ticket.priority, ticket.assigneeId, visible]);
+
+  const activeTemplates = (templatesQuery.data ?? []).filter((template) => template.isActive);
+
+  const applyTemplate = (template: any) => {
+    const resolvedFields = inferTemplateFields(template);
+    setSelectedTemplateId(template.id);
+
+    if (resolvedFields.length) {
+      setTemplateFields(resolvedFields);
+      const values = Object.fromEntries(resolvedFields.map((field: any) => [field.key, '']));
+      setTemplateFieldValues(values);
+      setDescription(template.description ?? '');
+      return;
+    }
+
+    setTemplateFields(null);
+    setTemplateFieldValues({});
+    setDescription(template.description ?? ticket.description ?? '');
+  };
 
   const handleSave = async () => {
     try {
       setSaving(true);
+      let finalDescription = description.trim();
+
+      if (templateFields && templateFields.length) {
+        const missing = templateFields.filter((field) => field.required && !(templateFieldValues[field.key]?.trim()));
+        if (missing.length) {
+          Alert.alert('Template required', `Please complete the required fields: ${missing.map((field) => field.label).join(', ')}`);
+          return;
+        }
+
+        const built = templateFields.map((field) => `${field.label}: ${templateFieldValues[field.key] ?? ''}`).join('\n');
+        finalDescription = [built, description.trim()].filter(Boolean).join('\n\n');
+      }
+
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5000';
 
       const res = await fetch(`${baseUrl}/api/tickets/${ticket.id}`, {
@@ -46,7 +157,7 @@ export function EditTicketModal({ visible, ticket, agents, onClose, onSave }: Ed
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subject,
-          description,
+          description: finalDescription || undefined,
           status,
           priority,
           assigneeId,
@@ -122,6 +233,41 @@ export function EditTicketModal({ visible, ticket, agents, onClose, onSave }: Ed
           ))}
         </ScrollView>
 
+        <Text style={styles.label}>Template</Text>
+        {activeTemplates.length ? (
+          <View style={styles.row}>
+            {activeTemplates.map((template) => (
+              <TouchableOpacity
+                key={template.id}
+                style={[styles.chip, selectedTemplateId === template.id && styles.chipActive]}
+                onPress={() => applyTemplate(template)}
+              >
+                <Text style={[styles.chipText, selectedTemplateId === template.id && styles.chipTextActive]}>
+                  {template.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.helperText}>No active templates available.</Text>
+        )}
+
+        {templateFields && templateFields.length ? (
+          <View style={{ marginTop: 12 }}>
+            {templateFields.map((field) => (
+              <View key={field.key} style={{ marginBottom: 10 }}>
+                <Text style={styles.label}>{field.label}{field.required ? ' *' : ''}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={templateFieldValues[field.key] ?? ''}
+                  onChangeText={(text) => setTemplateFieldValues((prev) => ({ ...prev, [field.key]: text }))}
+                  placeholder={field.label}
+                />
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <Text style={styles.label}>Description</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
@@ -154,6 +300,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
   chipText: { fontSize: 12, color: '#475569', fontWeight: '600' },
   chipTextActive: { color: '#FFF' },
+  helperText: { color: '#64748B', fontSize: 12, marginTop: 4 },
   actions: { flexDirection: 'row', gap: 12, marginTop: 24, marginBottom: 40 },
   cancelBtn: { flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' },
   cancelText: { color: '#64748B', fontWeight: '600' },

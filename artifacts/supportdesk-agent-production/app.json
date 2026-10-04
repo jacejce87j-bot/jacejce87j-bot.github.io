@@ -2,6 +2,7 @@
   "expo": {
     "name": "Orion",
     "slug": "orion",
+    "scheme": "supportdesk",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -11,8 +12,12 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "usesCleartextTraffic": true
     },
+    "plugins": [
+      "./plugins/withNetworkSecurityConfig.js"
+    ],
     "extra": {
       "eas": {
         "projectId": "8ae22d43-b4f1-47f3-abea-d785ae9d46f9"

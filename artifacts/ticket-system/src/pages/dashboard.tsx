@@ -18,6 +18,7 @@ import {
   Activity, ArrowUpRight
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Link } from "wouter";
 
 export default function Dashboard() {
   const { data: stats } = useGetDashboardStats();
@@ -25,6 +26,11 @@ export default function Dashboard() {
   const { data: volume } = useGetTicketVolume();
   const { data: workload } = useGetAgentWorkload();
   const { data: sla } = useGetSlaHealth();
+  const { data: routingStatus } = useQuery<{ onCall: { name: string; isOnline: boolean } | null; backup: { name: string; isOnline: boolean } | null }>({ queryKey: ["/api/dashboard/routing-status"], queryFn: async () => {
+    const response = await fetch("/api/dashboard/routing-status", { credentials: "include" });
+    if (!response.ok) throw new Error("Unable to load routing status");
+    return response.json();
+  } });
 
   const slaData = sla ? [
     { name: "On Track", value: sla.onTrack, color: "hsl(var(--chart-2))" },
@@ -82,6 +88,20 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div><CardTitle>Routing status</CardTitle><CardDescription>Current primary and fallback availability</CardDescription></div>
+            <Link href="/settings" className="text-sm text-primary hover:underline">Manage</Link>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {[["On-call", routingStatus?.onCall], ["Backup", routingStatus?.backup]].map(([label, agent]) => (
+              <div key={label as string} className="flex items-center justify-between rounded-md border p-3">
+                <div><p className="text-xs text-muted-foreground">{label as string}</p><p className="font-medium">{(agent as { name: string } | null)?.name ?? "Not configured"}</p></div>
+                <Badge variant={(agent as { isOnline: boolean } | null)?.isOnline ? "default" : "secondary"}>{(agent as { isOnline: boolean } | null)?.isOnline ? "Online" : "Offline"}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           {/* Main Chart */}

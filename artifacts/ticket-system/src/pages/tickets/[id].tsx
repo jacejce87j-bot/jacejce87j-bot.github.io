@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { AppLayout } from "@/components/layout";
@@ -154,7 +155,7 @@ export default function TicketDetail() {
     setIsCreatingKba(true);
     try {
       const token = localStorage.getItem("userToken") || localStorage.getItem("auth_token") || localStorage.getItem("token");
-      const response = await fetch("/api/knowledge-base/from-ticket", {
+      const response = await fetch(getApiUrl("/api/knowledge-base/from-ticket"), {
         method: "POST",
         credentials: "include",
         headers: {

@@ -1,0 +1,31 @@
+Candidate folders for cleanup (review before deleting):
+
+1) artifacts-backup-20260818-092903/
+   - Likely an archived backup of artifacts. Keep if you need a snapshot; otherwise archive externally and delete to reduce confusion.
+
+2) server/
+   - Contains legacy server scripts and a small example server. Confirm whether production API uses artifacts/api-server or this folder.
+
+3) .agents/ and .agents/memory/
+   - Internal session/checkpoint artifacts. Keep if active sessions are required, otherwise safe to archive.
+
+4) test-login.js and seed-test-user.sql
+   - Useful for local testing; move to a /dev-tools folder if you want to keep them but avoid cluttering root.
+
+5) main.py and pyproject.toml
+   - Python artifacts; check whether they are actively used. If not, consider archiving.
+
+6) artifacts-backup-20260818-092903/artifacts/supportdesk-agent-production/.env* (and similar backup env files)
+   - Contain copies of env files that may include sensitive values — ensure secure handling before deletion.
+
+Review checklist before deletion:
+- Confirm no unique, unsaved changes exist in the folder (diff against canonical artifacts if applicable).
+- Back up the folder (zip) externally before removal.
+- Remove only after confirming other environments (CI, production) do not depend on it.
+
+If you'd like, I can:
+- Archive (zip) any of the above and move it to attached_assets/ or a zipped_backups/ folder.
+- Delete selected folders after explicit confirmation.
+- Produce a detailed list of files in each candidate folder for auditing.
+
+Tell me which action to take for each candidate (archive/delete/list files).

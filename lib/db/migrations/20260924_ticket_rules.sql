@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS ticket_rules (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  conditions JSONB NOT NULL DEFAULT '{}'::jsonb,
+  actions JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

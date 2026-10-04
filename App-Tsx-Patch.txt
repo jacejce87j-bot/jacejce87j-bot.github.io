@@ -1,0 +1,8 @@
+// App.tsx patch - add route
+import HealthReportPage from './pages/reports/health';
+
+// Inside Routes:
+<Route path="/reports/health" element={<ProtectedRoute><HealthReportPage /></ProtectedRoute>} />
+
+// Sidebar - add to reports section:
+{ label: 'Vehicle Health', path: '/reports/health', icon: 'Activity' }

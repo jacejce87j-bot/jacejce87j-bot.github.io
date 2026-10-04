@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout";
@@ -92,7 +93,7 @@ export default function AgentKpisReport() {
         from: new Date(`${from}T00:00:00`).toISOString(),
         to: new Date(`${to}T23:59:59.999`).toISOString(),
       });
-      const response = await fetch(`/api/dashboard/agent-kpis?${params}`, { credentials: "include" });
+      const response = await fetch(getApiUrl("/api")/dashboard/agent-kpis?${params}"), { credentials: "include" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? `Report request failed (${response.status})`);
       setReport(body);

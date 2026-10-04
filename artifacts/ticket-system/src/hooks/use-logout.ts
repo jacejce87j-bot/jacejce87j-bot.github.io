@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function useLogout() {
@@ -8,7 +9,7 @@ export function useLogout() {
     try {
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
       if (token) {
-        await fetch("/api/auth/logout", {
+        await fetch(getApiUrl("/api")/auth/logout", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,

@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -25,8 +26,8 @@ export default function DeviceTypesPage() {
     setError(null);
     try {
       const [trackingRes, cameraRes] = await Promise.all([
-        fetch("/api/device-types?category=tracking", { credentials: "include" }),
-        fetch("/api/device-types?category=camera", { credentials: "include" }),
+        fetch(getApiUrl("/api")/device-types?category=tracking", { credentials: "include" }),
+        fetch(getApiUrl("/api")/device-types?category=camera", { credentials: "include" }),
       ]);
 
       if (!trackingRes.ok || !cameraRes.ok) {
@@ -63,7 +64,7 @@ export default function DeviceTypesPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/device-types", {
+      const response = await fetch(getApiUrl("/api")/device-types", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -87,7 +88,7 @@ export default function DeviceTypesPage() {
   };
 
   const deleteDeviceType = async (id: number) => {
-    const response = await fetch(`/api/device-types/${id}`, {
+    const response = await fetch(getApiUrl("/api")/device-types/${id}"), {
       method: "DELETE",
       credentials: "include",
     });

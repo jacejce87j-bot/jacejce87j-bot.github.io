@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { AppLayout } from "@/components/layout";
@@ -53,7 +54,7 @@ export default function KnowledgeBasePage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/knowledge-base?q=${encodeURIComponent(search)}`, {
+      const response = await fetch(getApiUrl("/api")/knowledge-base?q=${encodeURIComponent(search)}"), {
         credentials: "include",
         headers: authHeaders(),
       });
@@ -70,7 +71,7 @@ export default function KnowledgeBasePage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/knowledge-base/${id}`, {
+      const response = await fetch(getApiUrl("/api")/knowledge-base/${id}"), {
         credentials: "include",
         headers: authHeaders(),
       });

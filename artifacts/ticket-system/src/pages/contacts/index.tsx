@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AppLayout } from "@/components/layout";
@@ -206,7 +207,7 @@ export default function ContactList() {
             <Button disabled={creatingUser || !userForm.email.trim() || !userForm.password.trim()} onClick={async () => {
               try {
                 setCreatingUser(true);
-                const res = await fetch(`/api/auth/register`, {
+                const res = await fetch(getApiUrl("/api")/auth/register"), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ email: userForm.email.trim(), password: userForm.password, fullName: userForm.fullName.trim() || undefined, role: userForm.role })

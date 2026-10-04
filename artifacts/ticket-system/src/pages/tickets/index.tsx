@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout";

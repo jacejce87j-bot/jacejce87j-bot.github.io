@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
 export interface SupportUser {
@@ -23,7 +24,7 @@ export function useSupportUser() {
   const query = useQuery({
     queryKey: ["/api/auth/user", token],
     queryFn: async (): Promise<SupportUser | null> => {
-      const res = await fetch("/api/auth/user", {
+      const res = await fetch(getApiUrl("/api")/auth/user", {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",

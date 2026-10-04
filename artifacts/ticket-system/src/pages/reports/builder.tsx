@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
@@ -170,7 +171,7 @@ export default function ReportBuilder() {
         to: new Date(`${to}T23:59:59.999`).toISOString(),
       });
       const token = localStorage.getItem("userToken") || localStorage.getItem("auth_token") || localStorage.getItem("token");
-      const response = await fetch(`/api/reports/pivot-data?${params}`, {
+      const response = await fetch(getApiUrl("/api")/reports/pivot-data?${params}"), {
         credentials: "include",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });

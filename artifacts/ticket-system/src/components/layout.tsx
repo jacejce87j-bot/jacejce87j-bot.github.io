@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -45,7 +46,7 @@ export function AppLayout({ children }: LayoutProps) {
 
     // 4. Non-blocking fire-and-forget backend notification
     if (token) {
-      fetch("/api/auth/logout", {
+      fetch(getApiUrl("/api")/auth/logout", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

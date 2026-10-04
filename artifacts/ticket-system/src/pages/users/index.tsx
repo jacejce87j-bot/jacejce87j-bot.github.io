@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { Card } from "@/components/ui/card";
@@ -17,7 +18,7 @@ function RoleEditor({ email, currentRole, onSaved }: { email: string; currentRol
   const save = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/users/role', {
+      const res = await fetch(getApiUrl('/api')/users/role', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, role }),
@@ -63,7 +64,7 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch(getApiUrl('/api')/users');
       if (!res.ok) throw new Error('Failed to load users');
       const body = await res.json();
       setUsers(body.data || []);
@@ -79,7 +80,7 @@ export default function UsersPage() {
   const createUser = async () => {
     setCreating(true);
     try {
-      const res = await fetch('/api/users', {
+      const res = await fetch(getApiUrl('/api')/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email.trim(), password: form.password, fullName: form.fullName.trim() || undefined, role: form.role })
@@ -103,7 +104,7 @@ export default function UsersPage() {
     if (!ok) return;
 
     try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      const res = await fetch(getApiUrl("/api")/users/${userId}"), { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || 'Failed to delete user');
@@ -128,7 +129,7 @@ export default function UsersPage() {
 
     setUpdatingPassword(true);
     try {
-      const res = await fetch(`/api/users/${passwordUser.id}/password`, {
+      const res = await fetch(getApiUrl("/api")/users/${passwordUser.id}/password"), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword }),

@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,18 +98,18 @@ export default function Settings() {
   const isAdmin = normalizedRole === "admin";
   const canManageTemplates = ["admin", "supervisor", "agent"].includes(normalizedRole);
   const loadMacros = async () => {
-    const response = await fetch("/api/settings/ticket-macros", { credentials: "include" });
+    const response = await fetch(getApiUrl("/api")/settings/ticket-macros", { credentials: "include" });
     if (response.ok) setMacros(await response.json());
   };
   const loadMacroAnalytics = async () => {
-    const response = await fetch("/api/settings/ticket-macros/analytics", { credentials: "include" });
+    const response = await fetch(getApiUrl("/api")/settings/ticket-macros/analytics", { credentials: "include" });
     if (response.ok) setMacroAnalytics(await response.json());
   };
   useEffect(() => { void loadMacros(); void loadMacroAnalytics(); }, []);
   useEffect(() => {
     void Promise.all([
-      fetch("/api/agents", { credentials: "include" }).then((response) => response.ok ? response.json() : []),
-      fetch("/api/settings/routing", { credentials: "include" }).then((response) => response.ok ? response.json() : { onCallAgentId: null }),
+      fetch(getApiUrl("/api")/agents", { credentials: "include" }).then((response) => response.ok ? response.json() : []),
+      fetch(getApiUrl("/api")/settings/routing", { credentials: "include" }).then((response) => response.ok ? response.json() : { onCallAgentId: null }),
     ]).then(([agents, routing]) => {
       setRoutingAgents(Array.isArray(agents) ? agents : []);
       setOnCallAgentId(routing?.onCallAgentId == null ? "" : String(routing.onCallAgentId));
@@ -118,7 +119,7 @@ export default function Settings() {
   const saveRouting = async () => {
     setRoutingSaving(true);
     try {
-      const response = await fetch("/api/settings/routing", {
+      const response = await fetch(getApiUrl("/api")/settings/routing", {
         method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ onCallAgentId: onCallAgentId || null, backupAgentId: backupAgentId || null }),
       });
@@ -132,7 +133,7 @@ export default function Settings() {
   };
   const saveMacro = async () => {
     if (!macroForm.name.trim() || !macroForm.content.trim()) return;
-    const response = await fetch("/api/settings/ticket-macros", {
+    const response = await fetch(getApiUrl("/api")/settings/ticket-macros", {
       method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(macroForm),
     });
@@ -144,7 +145,7 @@ export default function Settings() {
     } else toast({ title: "Could not save macro", variant: "destructive" });
   };
   const deleteMacro = async (id: number) => {
-    const response = await fetch(`/api/settings/ticket-macros/${id}`, { method: "DELETE", credentials: "include" });
+    const response = await fetch(getApiUrl("/api")/settings/ticket-macros/${id}"), { method: "DELETE", credentials: "include" });
     if (response.ok) await loadMacros();
   };
 

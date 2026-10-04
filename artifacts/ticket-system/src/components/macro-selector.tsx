@@ -1,3 +1,4 @@
+import { getApiUrl } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -10,7 +11,7 @@ export function MacroSelector({ scope, context, ticketId, userId, onInsert }: { 
   const [macros, setMacros] = useState<Macro[]>([]);
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    fetch("/api/settings/ticket-macros", { credentials: "include" })
+    fetch(getApiUrl("/api")/settings/ticket-macros", { credentials: "include" })
       .then((response) => response.ok ? response.json() : [])
       .then((data) => setMacros(Array.isArray(data) ? data : []))
       .catch(() => setMacros([]));
@@ -19,7 +20,7 @@ export function MacroSelector({ scope, context, ticketId, userId, onInsert }: { 
   if (!available.length) return null;
   const recordUsage = async (macro: Macro) => {
     try {
-      const response = await fetch(`/api/settings/ticket-macros/${macro.id}/usage`, {
+      const response = await fetch(getApiUrl("/api")/settings/ticket-macros/${macro.id}/usage"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
-    dedupe: ["react", "react-dom"],
+    dedupe: ["react", "react-dom", "@tanstack/react-query", "@tanstack/query-core"],
   },
   root: path.resolve(import.meta.dirname),
   build: {

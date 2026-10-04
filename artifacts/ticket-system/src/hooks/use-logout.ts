@@ -9,7 +9,7 @@ export function useLogout() {
     try {
       const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
       if (token) {
-        await fetch(getApiUrl("/api")/auth/logout", {
+        await fetch(getApiUrl("/api/auth/logout"), {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,

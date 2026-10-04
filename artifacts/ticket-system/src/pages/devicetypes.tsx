@@ -26,8 +26,8 @@ export default function DeviceTypesPage() {
     setError(null);
     try {
       const [trackingRes, cameraRes] = await Promise.all([
-        fetch(getApiUrl("/api")/device-types?category=tracking", { credentials: "include" }),
-        fetch(getApiUrl("/api")/device-types?category=camera", { credentials: "include" }),
+        fetch(getApiUrl("/api/device-types?category=tracking"), { credentials: "include" }),
+        fetch(getApiUrl("/api/device-types?category=camera"), { credentials: "include" }),
       ]);
 
       if (!trackingRes.ok || !cameraRes.ok) {
@@ -64,7 +64,7 @@ export default function DeviceTypesPage() {
     setError(null);
 
     try {
-      const response = await fetch(getApiUrl("/api")/device-types", {
+      const response = await fetch(getApiUrl("/api/device-types"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -88,7 +88,7 @@ export default function DeviceTypesPage() {
   };
 
   const deleteDeviceType = async (id: number) => {
-    const response = await fetch(getApiUrl("/api")/device-types/${id}"), {
+    const response = await fetch(getApiUrl(`/api/device-types/${id}`), {
       method: "DELETE",
       credentials: "include",
     });

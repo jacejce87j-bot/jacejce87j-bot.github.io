@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { data: workload } = useGetAgentWorkload();
   const { data: sla } = useGetSlaHealth();
   const { data: routingStatus } = useQuery<{ onCall: { name: string; isOnline: boolean } | null; backup: { name: string; isOnline: boolean } | null }>({ queryKey: ["/api/dashboard/routing-status"], queryFn: async () => {
-    const response = await fetch(getApiUrl("/api")/dashboard/routing-status", { credentials: "include" });
+    const response = await fetch(getApiUrl("/api/dashboard/routing-status"), { credentials: "include" });
     if (!response.ok) throw new Error("Unable to load routing status");
     return response.json();
   } });

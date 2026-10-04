@@ -66,7 +66,7 @@ export default function HealthReportPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(getApiUrl("/api")/health-reports/units", { headers: authHeaders() });
+      const response = await fetch(getApiUrl("/api/health-reports/units"), { headers: authHeaders() });
       if (!response.ok) throw new Error(`Unable to load health units (${response.status})`);
       const body = await response.json() as { units?: HealthUnit[] };
       setUnits(body.units ?? []);
@@ -124,7 +124,7 @@ export default function HealthReportPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const response = await fetch(getApiUrl("/api")/health-reports", { method: "POST", headers: authHeaders(), body: form });
+      const response = await fetch(getApiUrl("/api/health-reports"), { method: "POST", headers: authHeaders(), body: form });
       const body = await response.json().catch(() => ({})) as { valid?: number; rejected?: Rejection[]; error?: string };
       if (!response.ok) throw new Error(body.error ?? `Import failed (${response.status})`);
       setRejected(body.rejected ?? []);

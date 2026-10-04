@@ -225,8 +225,8 @@ export default function NewTicket() {
     const loadDeviceTypes = async () => {
       try {
         const [trackingRes, cameraRes] = await Promise.all([
-          fetch(getApiUrl("/api")/device-types?category=tracking", { credentials: "include" }),
-          fetch(getApiUrl("/api")/device-types?category=camera", { credentials: "include" }),
+          fetch(getApiUrl("/api/device-types?category=tracking"), { credentials: "include" }),
+          fetch(getApiUrl("/api/device-types?category=camera"), { credentials: "include" }),
         ]);
 
         const [trackingData, cameraData] = await Promise.all([

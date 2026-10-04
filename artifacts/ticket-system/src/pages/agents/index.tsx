@@ -42,7 +42,7 @@ export default function AgentList() {
     if (!ok) return;
 
     try {
-      const response = await fetch(getApiUrl("/api")/agents/${agentId}"), { method: "DELETE" });
+      const response = await fetch(getApiUrl(`/api/agents/${agentId}`), { method: "DELETE" });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body?.error || "Could not delete agent");
@@ -56,7 +56,7 @@ export default function AgentList() {
 
   const handlePresenceChange = async (agentId: number, isOnline: boolean) => {
     try {
-      const response = await fetch(getApiUrl("/api")/agents/${agentId}"), {
+      const response = await fetch(getApiUrl(`/api/agents/${agentId}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isOnline }),

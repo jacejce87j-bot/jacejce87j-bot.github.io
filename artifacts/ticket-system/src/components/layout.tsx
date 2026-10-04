@@ -46,7 +46,7 @@ export function AppLayout({ children }: LayoutProps) {
 
     // 4. Non-blocking fire-and-forget backend notification
     if (token) {
-      fetch(getApiUrl("/api")/auth/logout", {
+      fetch(getApiUrl("/api/auth/logout"), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

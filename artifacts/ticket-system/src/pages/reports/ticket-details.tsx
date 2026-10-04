@@ -110,7 +110,7 @@ export default function TicketDetailsReport() {
     async function loadOrganizations() {
       setLoadingOrganizations(true);
       try {
-        const response = await fetch(getApiUrl("/api")/organizations?limit=500&sortBy=name", {
+        const response = await fetch(getApiUrl("/api/organizations?limit=500&sortBy=name"), {
           credentials: "include",
           headers: getAuthHeaders(),
         });
@@ -147,7 +147,7 @@ export default function TicketDetailsReport() {
         to: rangeEnd.toISOString(),
         organizationId,
       });
-      const response = await fetch(getApiUrl("/api")/reports/ticket-details?${params.toString()}"), {
+      const response = await fetch(getApiUrl(`/api/reports/ticket-details?${params.toString()}`), {
         credentials: "include",
         headers: getAuthHeaders(),
       });

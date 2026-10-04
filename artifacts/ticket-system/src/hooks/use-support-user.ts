@@ -24,7 +24,7 @@ export function useSupportUser() {
   const query = useQuery({
     queryKey: ["/api/auth/user", token],
     queryFn: async (): Promise<SupportUser | null> => {
-      const res = await fetch(getApiUrl("/api")/auth/user", {
+      const res = await fetch(getApiUrl("/api/auth/user"), {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",

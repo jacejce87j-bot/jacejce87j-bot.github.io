@@ -54,7 +54,7 @@ export default function KnowledgeBasePage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(getApiUrl("/api")/knowledge-base?q=${encodeURIComponent(search)}"), {
+      const response = await fetch(getApiUrl(`/api/knowledge-base?q=${encodeURIComponent(search)}`), {
         credentials: "include",
         headers: authHeaders(),
       });
@@ -71,7 +71,7 @@ export default function KnowledgeBasePage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(getApiUrl("/api")/knowledge-base/${id}"), {
+      const response = await fetch(getApiUrl(`/api/knowledge-base/${id}`), {
         credentials: "include",
         headers: authHeaders(),
       });

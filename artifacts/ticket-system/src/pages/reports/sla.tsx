@@ -56,7 +56,7 @@ export default function SlaReports() {
       const params = new URLSearchParams();
       if (from) params.set("from", new Date(`${from}T00:00:00`).toISOString());
       if (to) params.set("to", new Date(`${to}T23:59:59.999`).toISOString());
-      const response = await fetch(getApiUrl("/api")/reports/sla?${params.toString()}"), { credentials: "include" });
+      const response = await fetch(getApiUrl(`/api/reports/sla?${params.toString()}`), { credentials: "include" });
       const responseText = await response.text();
       let body: {
         error?: string;

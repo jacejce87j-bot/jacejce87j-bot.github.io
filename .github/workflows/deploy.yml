@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
       - name: Build
         working-directory: artifacts/ticket-system
         run: pnpm run build

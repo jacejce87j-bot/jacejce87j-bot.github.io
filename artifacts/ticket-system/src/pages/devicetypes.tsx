@@ -1,4 +1,4 @@
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthHeaders } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -26,8 +26,14 @@ export default function DeviceTypesPage() {
     setError(null);
     try {
       const [trackingRes, cameraRes] = await Promise.all([
-        fetch(getApiUrl("/api/device-types?category=tracking"), { credentials: "include" }),
-        fetch(getApiUrl("/api/device-types?category=camera"), { credentials: "include" }),
+        fetch(getApiUrl("/api/device-types?category=tracking"), {
+          credentials: "include",
+          headers: getAuthHeaders(),
+        }),
+        fetch(getApiUrl("/api/device-types?category=camera"), {
+          credentials: "include",
+          headers: getAuthHeaders(),
+        }),
       ]);
 
       if (!trackingRes.ok || !cameraRes.ok) {
@@ -67,7 +73,10 @@ export default function DeviceTypesPage() {
       const response = await fetch(getApiUrl("/api/device-types"), {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ name: trimmed, category }),
       });
 
@@ -91,6 +100,7 @@ export default function DeviceTypesPage() {
     const response = await fetch(getApiUrl(`/api/device-types/${id}`), {
       method: "DELETE",
       credentials: "include",
+      headers: getAuthHeaders(),
     });
 
     if (response.ok) {

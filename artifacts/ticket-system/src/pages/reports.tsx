@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
+import { getApiUrl, getAuthHeaders } from "@/lib/api";
 import { AppLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,7 @@ export default function Reports() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -63,14 +65,18 @@ export default function Reports() {
     async function loadTickets() {
       try {
         setIsLoading(true);
-        const url = new URL("/api/tickets", window.location.origin);
+        setLoadError(null);
+        const url = new URL(getApiUrl("/api/tickets"), window.location.origin);
         url.searchParams.set("limit", "5000");
         url.searchParams.set("sortBy", "createdAt");
         url.searchParams.set("sortDir", "desc");
         if (search.trim()) url.searchParams.set("q", search.trim());
 
-        const response = await fetch(url.toString(), { credentials: "include" });
-        if (!response.ok) throw new Error("Unable to load tickets");
+        const response = await fetch(url.toString(), {
+          credentials: "include",
+          headers: getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error(`Unable to load tickets (HTTP ${response.status})`);
         const payload = await response.json();
         if (!ignore) {
           const data = Array.isArray(payload?.data) ? payload.data : [];
@@ -98,7 +104,10 @@ export default function Reports() {
           })));
         }
       } catch (error) {
-        if (!ignore) setRows([]);
+        if (!ignore) {
+          setRows([]);
+          setLoadError(error instanceof Error ? error.message : "Unable to load historical tickets.");
+        }
       } finally {
         if (!ignore) setIsLoading(false);
       }
@@ -229,6 +238,11 @@ export default function Reports() {
         </div>
 
         <div className="rounded-lg border bg-card overflow-hidden">
+          {loadError && (
+            <div role="alert" className="border-b border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {loadError}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-muted/50 text-left">
@@ -248,6 +262,12 @@ export default function Reports() {
                   <tr>
                     <td colSpan={12 + installationColumns.length} className="px-4 py-10 text-center text-muted-foreground">
                       Loading reports…
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={12 + installationColumns.length} className="px-4 py-10 text-center text-destructive">
+                      Historical tickets could not be loaded.
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (

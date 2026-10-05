@@ -1,4 +1,4 @@
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthHeaders } from "@/lib/api";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
@@ -225,8 +225,14 @@ export default function NewTicket() {
     const loadDeviceTypes = async () => {
       try {
         const [trackingRes, cameraRes] = await Promise.all([
-          fetch(getApiUrl("/api/device-types?category=tracking"), { credentials: "include" }),
-          fetch(getApiUrl("/api/device-types?category=camera"), { credentials: "include" }),
+          fetch(getApiUrl("/api/device-types?category=tracking"), {
+            credentials: "include",
+            headers: getAuthHeaders(),
+          }),
+          fetch(getApiUrl("/api/device-types?category=camera"), {
+            credentials: "include",
+            headers: getAuthHeaders(),
+          }),
         ]);
 
         const [trackingData, cameraData] = await Promise.all([

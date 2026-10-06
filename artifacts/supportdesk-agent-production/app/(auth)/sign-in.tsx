@@ -6,6 +6,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { useColors } from '@/hooks/useColors';
 import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
 import { configureNativeApiTransport } from '@workspace/api-client-react';
+import { BACKUP_API, fetchWithFallback } from '@/lib/api';
 
 // ✅ Universal storage helper (works on both Native & Web)
 import { tokenStorage } from '@/lib/storage';
@@ -30,7 +31,7 @@ export default function SignInScreen() {
     setErrorMessage('');
 
     try {
-      const response = await fetch(`${baseUrl}/api/auth/login`, {
+      const response = await fetchWithFallback('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,7 +63,7 @@ export default function SignInScreen() {
 
         // Ensure shared API client also gets the token (web + native)
         try {
-          configureNativeApiTransport(baseUrl, data.token);
+          configureNativeApiTransport(baseUrl, data.token, BACKUP_API);
         } catch (e) {
           try {
             if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
@@ -83,7 +84,7 @@ export default function SignInScreen() {
         }
 
         // Navigate to main workspace upon successful login
-        router.replace('/(tabs)');
+        router.replace(data.user?.mustChangePassword ? '/(auth)/change-password' : '/(tabs)');
       } else {
         throw new Error('No authentication token received.');
       }

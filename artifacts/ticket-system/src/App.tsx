@@ -26,6 +26,7 @@ import NewTicket from "@/pages/tickets/new";
 import ContactDetail from "@/pages/contacts/[id]";
 import OrganizationDetail from "@/pages/organizations/[id]";
 import Login from "@/pages/login";
+import PasswordChange from "@/pages/password-change";
 import { useSupportUser } from "@/hooks/use-support-user";
 
 const queryClient = new QueryClient();
@@ -56,6 +57,10 @@ function AppRoutes() {
   // 2. Access Denied Guard
   if (accessDenied) {
     return <AccessDenied />;
+  }
+
+  if (user?.mustChangePassword) {
+    return <PasswordChange />;
   }
 
   // 3. Authenticated Route Tree (Direct children under Switch, no Fragments)

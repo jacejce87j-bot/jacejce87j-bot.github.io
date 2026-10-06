@@ -21,7 +21,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
-router.use(usersRouter);
+router.use(requireAuth, usersRouter);
 router.use(storageRouter);
 router.use(requireAuth);
 router.use("/tickets", ticketsRouter);

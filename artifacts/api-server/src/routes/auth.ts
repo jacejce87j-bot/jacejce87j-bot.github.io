@@ -14,6 +14,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(12).max(128),
+});
+
 /**
  * POST /api/auth/login
  * Internal login endpoint that validates user credentials and issues a JWT token.
@@ -40,12 +45,15 @@ router.post("/auth/login", async (req: Request, res: Response) => {
       return;
     }
 
-    if ("passwordHash" in user && typeof user.passwordHash === "string" && user.passwordHash) {
-      const isValid = await bcrypt.compare(password, user.passwordHash);
-      if (!isValid) {
-        res.status(401).json({ error: "Invalid email or password." });
-        return;
-      }
+    if (typeof user.passwordHash !== "string" || !user.passwordHash) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
     }
 
     const safeRole = String(user.role ?? "admin").trim().toLowerCase();
@@ -70,6 +78,7 @@ router.post("/auth/login", async (req: Request, res: Response) => {
         lastName: user.lastName,
         profileImageUrl: user.profileImageUrl,
         role: safeRole,
+        mustChangePassword: user.mustChangePassword,
       },
     };
     res.json(responseBody);
@@ -136,6 +145,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: safeRole,
+        mustChangePassword: user.mustChangePassword,
       },
     });
   } catch (_err) {
@@ -160,9 +170,58 @@ router.get("/auth/user", (req: Request, res: Response) => {
 
   try {
     const parsed = GetCurrentAuthUserResponse.parse(responseBody);
-    res.json(parsed);
+    res.json({
+      ...parsed,
+      user: parsed.user
+        ? { ...parsed.user, mustChangePassword: req.mustChangePassword ?? false }
+        : null,
+    });
   } catch (err: any) {
     res.status(500).json({ error: "Internal error: " + err.message });
+  }
+});
+
+router.post("/auth/change-password", async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication is required." });
+    return;
+  }
+
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Enter your current password and a new password of at least 12 characters.",
+    });
+    return;
+  }
+
+  try {
+    const [storedUser] = await db
+      .select({ passwordHash: usersTable.passwordHash })
+      .from(usersTable)
+      .where(eq(usersTable.id, user.id))
+      .limit(1);
+
+    if (!storedUser?.passwordHash || !(await bcrypt.compare(parsed.data.currentPassword, storedUser.passwordHash))) {
+      res.status(401).json({ error: "Your current password is incorrect." });
+      return;
+    }
+
+    if (await bcrypt.compare(parsed.data.newPassword, storedUser.passwordHash)) {
+      res.status(400).json({ error: "Choose a new password that differs from your current password." });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+    await db
+      .update(usersTable)
+      .set({ passwordHash, mustChangePassword: false, updatedAt: new Date() })
+      .where(eq(usersTable.id, user.id));
+
+    res.json({ message: "Password updated successfully.", mustChangePassword: false });
+  } catch (_err) {
+    res.status(500).json({ error: "Unable to update your password." });
   }
 });
 

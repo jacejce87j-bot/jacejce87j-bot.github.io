@@ -71,20 +71,45 @@ export function AppLayout({ children }: LayoutProps) {
     window.location.href = loginPath;
   };
 
-  const navItems = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/tickets", label: "Tickets", icon: Ticket },
-    { href: "/contacts", label: "Contacts", icon: Users },
-    { href: "/users", label: "Users", icon: Users },
-    { href: "/organizations", label: "Organizations", icon: Building2 },
-    { href: "/agents", label: "Agents", icon: Headset },
-    { href: "/devicetypes", label: "Device Types", icon: FolderCog },
-    { href: "/reports", label: "Reports", icon: BarChart3 },
-    { href: "/reports/builder", label: "Report Builder", icon: BarChart3 },
-    { href: "/reports/agent-kpis", label: "Agent KPIs", icon: Gauge },
-    { href: "/reports/health", label: "Vehicle Health", icon: Activity },
-    { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
-    { href: "/settings", label: "Settings", icon: Settings },
+  const navGroups = [
+    {
+      label: "Work",
+      items: [
+        { href: "/", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/tickets", label: "Tickets", icon: Ticket },
+      ],
+    },
+    {
+      label: "People & Accounts",
+      items: [
+        { href: "/contacts", label: "Contacts", icon: Users },
+        { href: "/organizations", label: "Organisations", icon: Building2 },
+        { href: "/users", label: "Users", icon: Users },
+        { href: "/agents", label: "Agents", icon: Headset },
+      ],
+    },
+    {
+      label: "Fleet / Operations",
+      items: [
+        { href: "/devicetypes", label: "Device Types", icon: FolderCog },
+        { href: "/reports/health", label: "Vehicle Health", icon: Activity },
+      ],
+    },
+    {
+      label: "Analytics",
+      items: [
+        { href: "/reports", label: "Reports", icon: BarChart3 },
+        { href: "/reports/builder", label: "Report Builder", icon: BarChart3 },
+        { href: "/reports/agent-kpis", label: "Agent KPIs", icon: Gauge },
+      ],
+    },
+    {
+      label: "Knowledge / Administration",
+      items: [
+        { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
+        { href: "/settings", label: "Settings", icon: Settings },
+      ],
+    },
   ];
 
   return (
@@ -107,29 +132,38 @@ export function AppLayout({ children }: LayoutProps) {
 
         {/* Navigation Links */}
         <div className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1 px-3">
-            {navItems.map((item) => {
-              const isActive =
-                location === item.href ||
-                (item.href !== "/" && location.startsWith(item.href));
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="space-y-5 px-3">
+            {navGroups.map((group) => (
+              <section key={group.label} aria-label={group.label}>
+                <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+                  {group.label}
+                </h2>
+                <ul className="space-y-1">
+                  {group.items.map((item) => {
+                    const isActive =
+                      location === item.href ||
+                      (item.href !== "/" && location.startsWith(item.href));
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                            isActive
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                          )}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         </div>
 
         {/* User Footer & Logout */}

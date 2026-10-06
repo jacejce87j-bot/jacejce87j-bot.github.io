@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { tokenStorage } from '@/lib/storage';
+import { fetchWithFallback } from '@/lib/api';
 
 export default function IndexScreen() {
   const colors = useColors();
@@ -14,7 +15,27 @@ export default function IndexScreen() {
         const token = await tokenStorage.getItem('userToken');
 
         if (token) {
-          // User is authenticated -> Go to tabs dashboard
+          try {
+            const response = await fetchWithFallback('/api/auth/user', {
+              headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+            });
+            if (response.status === 401) {
+              router.replace('/(auth)/sign-in');
+              return;
+            }
+            if (response.ok) {
+              const body = await response.json();
+              if (body?.user?.mustChangePassword) {
+                router.replace('/(auth)/change-password');
+                return;
+              }
+            } else {
+              console.warn(`Could not check password-change requirement (HTTP ${response.status}).`);
+            }
+          } catch (error) {
+            console.warn('Could not check password-change requirement:', error);
+          }
+
           router.replace('/(tabs)');
         } else {
           // User is unauthenticated -> Go to sign-in screen

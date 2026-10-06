@@ -58,6 +58,7 @@ router.post('/users', async (req, res) => {
         firstName: firstName || null,
         lastName: lastName || null,
         role,
+        mustChangePassword: true,
       })
       .returning();
 
@@ -106,7 +107,7 @@ router.patch('/users/:id/password', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const [updated] = await db
       .update(usersTable)
-      .set({ passwordHash, updatedAt: new Date() })
+      .set({ passwordHash, mustChangePassword: true, updatedAt: new Date() })
       .where(eq(usersTable.id, id))
       .returning({ id: usersTable.id });
 

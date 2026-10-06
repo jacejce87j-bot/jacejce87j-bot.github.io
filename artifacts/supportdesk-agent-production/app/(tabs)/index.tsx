@@ -29,8 +29,9 @@ import {
   type TicketAttachment,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { formatAttachmentSize, openTicketAttachment, pickTicketFile, uploadTicketFile } from '@/components/ticketAttachments';
+import { formatAttachmentSize, openTicketAttachment, pickTicketFiles, uploadTicketFile } from '@/components/ticketAttachments';
 import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
+import { fetchWithFallback } from '@/lib/api';
 
 const getToken = async () => {
   try {
@@ -59,12 +60,16 @@ export default function AgentHomeScreen() {
       try {
         const token = await getToken();
         if (!token) return;
-        const res = await fetch(`${baseUrl}/api/auth/user`, {
+        const res = await fetchWithFallback('/api/auth/user', {
           headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
         });
         if (!res.ok) return;
         const body = await res.json().catch(() => null);
         const user = body?.user ?? null;
+        if (user?.mustChangePassword) {
+          router.replace('/(auth)/change-password');
+          return;
+        }
         if (user) setCurrentUser({ id: user.id, email: user.email, firstName: user.firstName });
       } catch (e) {
         // ignore
@@ -83,6 +88,10 @@ export default function AgentHomeScreen() {
   useEffect(() => {
     const user = (currentUserQuery.data as any)?.user ?? null;
     if (user) {
+      if (user.mustChangePassword) {
+        router.replace('/(auth)/change-password');
+        return;
+      }
       setCurrentUser({ id: user.id, email: user.email, firstName: user.firstName });
     }
   }, [currentUserQuery.data]);
@@ -247,16 +256,37 @@ export default function AgentHomeScreen() {
   };
 
   const handleAddAttachment = async (ticketId: number, currentAttachments?: TicketAttachment[]) => {
-    const file = await pickTicketFile();
-    if (!file) return;
+    const files = await pickTicketFiles();
+    if (!files.length) return;
     setUploadingTicketId(ticketId);
     try {
-      const attachment = await uploadTicketFile(file);
-      await updateTicket.mutateAsync({
-        id: ticketId,
-        data: { attachments: [...(currentAttachments ?? []), attachment] },
-      });
-      await refreshTickets();
+      const uploaded: TicketAttachment[] = [];
+      const failures: string[] = [];
+      for (const file of files) {
+        try {
+          uploaded.push(await uploadTicketFile(file));
+        } catch (uploadError) {
+          const reason = uploadError instanceof Error ? uploadError.message : 'Upload failed.';
+          failures.push(`${file.name}: ${reason}`);
+        }
+      }
+
+      if (uploaded.length) {
+        await updateTicket.mutateAsync({
+          id: ticketId,
+          data: { attachments: [...(currentAttachments ?? []), ...uploaded] },
+        });
+        await refreshTickets();
+      }
+
+      if (failures.length) {
+        Alert.alert(
+          uploaded.length ? 'Some attachments failed' : 'Attachment failed',
+          uploaded.length
+            ? `Uploaded ${uploaded.length} of ${files.length} files. Failed: ${failures.join(' ')}`
+            : failures.join(' '),
+        );
+      }
     } catch (requestError) {
       Alert.alert('Attachment failed', requestError instanceof Error ? requestError.message : 'The attachment could not be added.');
     } finally {
@@ -441,7 +471,7 @@ export default function AgentHomeScreen() {
                     style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, uploadingTicketId === ticket.id && styles.disabled, pressed && styles.pressed]}
                   >
                     <Feather name="paperclip" size={14} color={colors.primary} />
-                    <Text style={[styles.actionText, { color: colors.primary }]}>{uploadingTicketId === ticket.id ? 'Uploading…' : 'Attach file'}</Text>
+                    <Text style={[styles.actionText, { color: colors.primary }]}>{uploadingTicketId === ticket.id ? 'Uploading…' : 'Attach files'}</Text>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"

@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS users (
   last_name VARCHAR,
   profile_image_url VARCHAR,
   password_hash VARCHAR,
+  must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
   role VARCHAR NOT NULL DEFAULT 'admin',
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()

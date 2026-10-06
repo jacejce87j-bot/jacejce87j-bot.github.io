@@ -8,6 +8,7 @@ export interface SupportUser {
   lastName?: string;
   role?: string;
   profileImageUrl?: string | null;
+  mustChangePassword?: boolean;
 }
 
 export function useSupportUser() {

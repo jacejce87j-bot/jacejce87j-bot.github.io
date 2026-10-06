@@ -12,6 +12,7 @@ declare global {
     interface Request {
       isAuthenticated(): this is AuthedRequest;
       user?: User;
+      mustChangePassword?: boolean;
     }
 
     interface AuthedRequest {
@@ -40,7 +41,7 @@ interface JWTPayload {
  */
 export async function authMiddleware(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ) {
   req.isAuthenticated = function (this: Request) {
@@ -59,14 +60,20 @@ export async function authMiddleware(
     return;
   }
 
+  let decoded: JWTPayload;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+  } catch {
+    next();
+    return;
+  }
 
-    if (!decoded || !decoded.id) {
-      next();
-      return;
-    }
+  if (!decoded?.id) {
+    next();
+    return;
+  }
 
+  try {
     const identity = {
       id: decoded.id,
       email: decoded.email ? decoded.email.trim().toLowerCase() : null,
@@ -106,6 +113,19 @@ export async function authMiddleware(
       profileImageUrl: dbUser.profileImageUrl,
       role: normalizedRole as AuthUser["role"],
     };
+    req.mustChangePassword = dbUser.mustChangePassword;
+
+    if (
+      req.mustChangePassword &&
+      !(req.method === "GET" && req.path === "/api/auth/user") &&
+      !(req.method === "POST" && req.path === "/api/auth/change-password")
+    ) {
+      res.status(403).json({
+        code: "PASSWORD_CHANGE_REQUIRED",
+        error: "You must change your password before continuing.",
+      });
+      return;
+    }
 
     if (identity.email) {
       await db
@@ -113,8 +133,9 @@ export async function authMiddleware(
         .set({ isOnline: true })
         .where(eq(agentsTable.email, identity.email));
     }
-  } catch (_err) {
-    // If token is invalid or expired, proceed unauthenticated (user = undefined)
+  } catch {
+    res.status(500).json({ error: "Unable to load the authenticated account." });
+    return;
   }
 
   next();

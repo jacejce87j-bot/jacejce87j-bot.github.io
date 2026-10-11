@@ -13,6 +13,7 @@ import AgentList from "@/pages/agents/index";
 import Settings from "@/pages/settings";
 import Users from "@/pages/users/index";
 import DeviceTypesPage from "@/pages/devicetypes";
+import StockPage from "@/pages/stock";
 import Reports from "@/pages/reports";
 import OrganizationReports from "@/pages/reports/organizations";
 import HealthReportPage from "@/pages/reports/health";
@@ -81,6 +82,7 @@ function AppRoutes() {
       <Route path="/contacts/:id" component={ContactDetail} />
       <Route path="/users" component={Users} />
       <Route path="/devicetypes" component={DeviceTypesPage} />
+      <Route path="/stock" component={StockPage} />
       <Route path="/reports" component={Reports} />
       <Route path="/reports/organizations" component={OrganizationReports} />
       <Route path="/reports/builder" component={ReportBuilder} />

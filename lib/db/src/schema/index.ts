@@ -17,3 +17,4 @@ export * from "./system_settings";
 export * from "./business_hours";
 export * from "./ticket_rules";
 export * from "./knowledge_base";
+export * from "./stock";

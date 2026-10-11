@@ -14,6 +14,7 @@ import {
   Gauge,
   Activity,
   BookOpen,
+  Boxes,
   LogOut,
 } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
@@ -93,6 +94,7 @@ export function AppLayout({ children }: LayoutProps) {
       items: [
         { href: "/devicetypes", label: "Device Types", icon: FolderCog },
         { href: "/reports/health", label: "Vehicle Health", icon: Activity },
+        { href: "/stock", label: "Stock", icon: Boxes },
       ],
     },
     {

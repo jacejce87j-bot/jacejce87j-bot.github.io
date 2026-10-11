@@ -16,6 +16,7 @@ import healthReportsRouter from "./health-reports";
 import slaReportsRouter from "./sla-reports";
 import knowledgeBaseRouter from "./knowledge-base";
 import reportBuilderRouter from "./report-builder";
+import stockRouter from "./stock";
 
 const router: IRouter = Router();
 
@@ -35,6 +36,7 @@ router.use("/agents", agentsRouter);
 router.use("/tags", tagsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/device-types", deviceTypesRouter);
+router.use(stockRouter);
 router.use("/settings", settingsRouter);
 
 export default router;

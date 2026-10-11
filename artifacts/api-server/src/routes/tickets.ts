@@ -8,6 +8,9 @@ import {
   organizationsTable,
   commentsTable,
   activityEventsTable,
+  stockItemsTable,
+  ticketStockUsageTable,
+  stockMovementsTable,
 } from "@workspace/db";
 import {
   eq,
@@ -614,6 +617,7 @@ router.patch("/:id", async (req, res) => {
   }
 
   const [ticket] = await db.update(ticketsTable).set(updates).where(eq(ticketsTable.id, id)).returning();
+  if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
   const [agent, contact, org, ccRow] = await Promise.all([
     ticket.assigneeId ? db.select().from(agentsTable).where(eq(agentsTable.id, ticket.assigneeId)).then((r) => r[0]) : null,
@@ -642,6 +646,169 @@ router.patch("/:id", async (req, res) => {
   }
 
   res.json(serializeTicket(ticket, agent, contact, org, Number(ccRow?.cnt ?? 0)));
+});
+
+const ticketStockUsageSchema = z.object({
+  items: z.array(z.object({
+    stockItemId: z.number().int().positive(),
+    quantity: z.number().int().positive().max(100_000),
+  })).min(1).max(50),
+});
+
+router.get("/:id/stock-usage", async (req, res) => {
+  const ticketId = Number(req.params.id);
+  if (!Number.isSafeInteger(ticketId) || ticketId < 1) {
+    return res.status(400).json({ error: "Invalid ticket ID." });
+  }
+  const [ticket] = await db.select({ id: ticketsTable.id }).from(ticketsTable).where(eq(ticketsTable.id, ticketId));
+  if (!ticket) return res.status(404).json({ error: "Ticket not found." });
+
+  const data = await db
+    .select({
+      id: ticketStockUsageTable.id,
+      ticketId: ticketStockUsageTable.ticketId,
+      stockItemId: ticketStockUsageTable.stockItemId,
+      stockItemName: stockItemsTable.name,
+      unit: stockItemsTable.unit,
+      quantity: ticketStockUsageTable.quantity,
+      recordedBy: ticketStockUsageTable.recordedBy,
+      createdAt: ticketStockUsageTable.createdAt,
+      deductedAt: ticketStockUsageTable.deductedAt,
+    })
+    .from(ticketStockUsageTable)
+    .innerJoin(stockItemsTable, eq(ticketStockUsageTable.stockItemId, stockItemsTable.id))
+    .where(eq(ticketStockUsageTable.ticketId, ticketId))
+    .orderBy(asc(ticketStockUsageTable.id));
+  res.json({ data });
+});
+
+router.post("/:id/stock-usage", async (req, res) => {
+  const ticketId = Number(req.params.id);
+  const parsed = ticketStockUsageSchema.safeParse(req.body);
+  if (!Number.isSafeInteger(ticketId) || ticketId < 1 || !parsed.success) {
+    return res.status(400).json({ error: "Select one or more stock items and enter a positive quantity for each." });
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const [ticket] = await tx
+      .select({ id: ticketsTable.id, status: ticketsTable.status })
+      .from(ticketsTable)
+      .where(eq(ticketsTable.id, ticketId))
+      .for("update");
+    if (!ticket) return { error: "not_found" as const };
+    if (ticket.status === "closed") return { error: "closed" as const };
+
+    const quantityByStockId = new Map<number, number>();
+    for (const item of parsed.data.items) {
+      quantityByStockId.set(item.stockItemId, (quantityByStockId.get(item.stockItemId) ?? 0) + item.quantity);
+    }
+    const stockIds = [...quantityByStockId.keys()].sort((a, b) => a - b);
+    const stockRows = await tx
+      .select()
+      .from(stockItemsTable)
+      .where(inArray(stockItemsTable.id, stockIds))
+      .orderBy(asc(stockItemsTable.id))
+      .for("update");
+    if (stockRows.length !== stockIds.length) return { error: "invalid_stock" as const };
+    const stockById = new Map(stockRows.map((stock) => [stock.id, stock]));
+    const shortages = stockIds.flatMap((stockId) => {
+      const stock = stockById.get(stockId)!;
+      const required = quantityByStockId.get(stockId)!;
+      return stock.quantityOnHand >= required ? [] : [`${stock.name}: need ${required}, have ${stock.quantityOnHand}`];
+    });
+    if (shortages.length) return { error: "insufficient_stock" as const, details: shortages.join("; ") };
+
+    const deductedAt = new Date();
+    for (const stockId of stockIds) {
+      const stock = stockById.get(stockId)!;
+      const quantity = quantityByStockId.get(stockId)!;
+      await tx
+        .update(stockItemsTable)
+        .set({ quantityOnHand: stock.quantityOnHand - quantity, updatedAt: deductedAt })
+        .where(eq(stockItemsTable.id, stockId));
+      await tx.insert(stockMovementsTable).values({
+        stockItemId: stockId,
+        ticketId,
+        movementType: "ticket_usage",
+        quantityDelta: -quantity,
+        reason: `Used on ticket #${ticketId}`,
+        recordedBy: req.user?.id ?? null,
+        createdAt: deductedAt,
+      });
+    }
+    const inserted = await tx
+      .insert(ticketStockUsageTable)
+      .values(parsed.data.items.map((item) => ({
+        ticketId,
+        stockItemId: item.stockItemId,
+        quantity: item.quantity,
+        recordedBy: req.user?.id ?? null,
+        deductedAt,
+      })))
+      .returning();
+    return { data: inserted };
+  });
+
+  if (result.error === "not_found") return res.status(404).json({ error: "Ticket not found." });
+  if (result.error === "closed") return res.status(409).json({ error: "Stock cannot be added to a closed ticket." });
+  if (result.error === "invalid_stock") return res.status(400).json({ error: "One or more selected stock items do not exist." });
+  if (result.error === "insufficient_stock") {
+    return res.status(409).json({ error: `Insufficient stock: ${result.details}.`, details: result.details });
+  }
+  return res.status(201).json(result);
+});
+
+router.delete("/:id/stock-usage/:usageId", async (req, res) => {
+  const ticketId = Number(req.params.id);
+  const usageId = Number(req.params.usageId);
+  if (!Number.isSafeInteger(ticketId) || ticketId < 1 || !Number.isSafeInteger(usageId) || usageId < 1) {
+    return res.status(400).json({ error: "Invalid ticket or stock usage ID." });
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const [ticket] = await tx
+      .select({ id: ticketsTable.id, status: ticketsTable.status })
+      .from(ticketsTable)
+      .where(eq(ticketsTable.id, ticketId))
+      .for("update");
+    if (!ticket) return "not_found" as const;
+
+    const [usage] = await tx
+      .select()
+      .from(ticketStockUsageTable)
+      .where(and(eq(ticketStockUsageTable.id, usageId), eq(ticketStockUsageTable.ticketId, ticketId)))
+      .for("update");
+    if (!usage) return "usage_not_found" as const;
+    if (usage.deductedAt) {
+      const [stock] = await tx
+        .select()
+        .from(stockItemsTable)
+        .where(eq(stockItemsTable.id, usage.stockItemId))
+        .for("update");
+      if (!stock) return "stock_not_found" as const;
+      const updatedAt = new Date();
+      await tx
+        .update(stockItemsTable)
+        .set({ quantityOnHand: stock.quantityOnHand + usage.quantity, updatedAt })
+        .where(eq(stockItemsTable.id, stock.id));
+      await tx.insert(stockMovementsTable).values({
+        stockItemId: stock.id,
+        ticketId,
+        movementType: "ticket_usage_reversal",
+        quantityDelta: usage.quantity,
+        reason: `Removed usage from ticket #${ticketId}`,
+        recordedBy: req.user?.id ?? null,
+        createdAt: updatedAt,
+      });
+    }
+    await tx.delete(ticketStockUsageTable).where(eq(ticketStockUsageTable.id, usageId));
+    return "deleted" as const;
+  });
+
+  if (result === "not_found") return res.status(404).json({ error: "Ticket not found." });
+  if (result === "usage_not_found") return res.status(404).json({ error: "Stock usage entry not found." });
+  if (result === "stock_not_found") return res.status(409).json({ error: "The stock item is unavailable; usage was not removed." });
+  return res.status(204).send();
 });
 
 // ─── MERGE TICKET ─────────────────────────────────────────────────────────────

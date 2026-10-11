@@ -1,5 +1,5 @@
-import { getApiUrl } from "@/lib/api";
-import { useState } from "react";
+import { getApiUrl, getAuthHeaders } from "@/lib/api";
+import { useEffect, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { 
@@ -26,13 +26,23 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTime, formatRelativeTime, getInitials } from "@/lib/utils";
-import { ArrowLeft, Clock, Send, CheckCircle2, Lock, Globe, GitMerge, ArrowRight, Paperclip, FileText, Download, BookOpen } from "lucide-react";
+import { ArrowLeft, Clock, Send, CheckCircle2, Lock, Globe, GitMerge, ArrowRight, Paperclip, FileText, Download, BookOpen, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MergeTicketDialog } from "@/components/merge-ticket-dialog";
 import { getMentionCandidates, replaceLastMention } from "@/lib/mentions";
 import { MacroSelector } from "@/components/macro-selector";
 import { useSupportUser } from "@/hooks/use-support-user";
+
+type StockItem = { id: number; name: string; sku: string | null; unit: string; quantityOnHand: number };
+type TicketStockUsage = {
+  id: number;
+  stockItemId: number;
+  stockItemName: string;
+  unit: string;
+  quantity: number;
+  deductedAt: string | null;
+};
 
 export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
@@ -90,6 +100,11 @@ export default function TicketDetail() {
   const [kbaContent, setKbaContent] = useState("");
   const [isCreatingKba, setIsCreatingKba] = useState(false);
   const [isSavingAttachment, setIsSavingAttachment] = useState(false);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [stockUsage, setStockUsage] = useState<TicketStockUsage[]>([]);
+  const [selectedStockId, setSelectedStockId] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("1");
+  const [isSavingStockUsage, setIsSavingStockUsage] = useState(false);
   const mentionSuggestions = getMentionCandidates(newComment, contacts);
 
   const { uploadFile, isUploading } = useUpload({
@@ -97,7 +112,94 @@ export default function TicketDetail() {
   });
 
   const handleStatusChange = (status: TicketStatus) => {
-    updateTicket.mutate({ id: ticketId, data: { status } });
+    updateTicket.mutate(
+      { id: ticketId, data: { status } },
+      {
+        onSuccess: () => {
+          if (status === "closed") void loadStock();
+        },
+        onError: (error) => toast({
+          title: "Could not update ticket status",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        }),
+      },
+    );
+  };
+
+  const loadStock = async () => {
+    try {
+      const [stockResponse, usageResponse] = await Promise.all([
+        fetch(getApiUrl("/api/stock"), { headers: getAuthHeaders() }),
+        fetch(getApiUrl(`/api/tickets/${ticketId}/stock-usage`), { headers: getAuthHeaders() }),
+      ]);
+      const [stockPayload, usagePayload] = await Promise.all([
+        stockResponse.json().catch(() => ({})),
+        usageResponse.json().catch(() => ({})),
+      ]);
+      if (!stockResponse.ok || !usageResponse.ok) {
+        throw new Error(stockPayload.error || usagePayload.error || "Could not load ticket stock details.");
+      }
+      setStockItems(stockPayload.data ?? []);
+      setStockUsage(usagePayload.data ?? []);
+    } catch (loadError) {
+      toast({
+        title: "Could not load stock details",
+        description: loadError instanceof Error ? loadError.message : "Please refresh and try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (ticketId) void loadStock();
+  }, [ticketId]);
+
+  const handleAddStockUsage = async () => {
+    const quantity = Number(stockQuantity);
+    if (!selectedStockId || !Number.isSafeInteger(quantity) || quantity < 1) return;
+
+    setIsSavingStockUsage(true);
+    try {
+      const response = await fetch(getApiUrl(`/api/tickets/${ticketId}/stock-usage`), {
+        method: "POST",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [{ stockItemId: Number(selectedStockId), quantity }] }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Could not record ticket stock usage.");
+      setSelectedStockId("");
+      setStockQuantity("1");
+      await loadStock();
+      toast({ title: "Stock use recorded", description: "The stock balance was reduced immediately." });
+    } catch (saveError) {
+      toast({
+        title: "Could not record stock use",
+        description: saveError instanceof Error ? saveError.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingStockUsage(false);
+    }
+  };
+
+  const handleRemoveStockUsage = async (usageId: number) => {
+    try {
+      const response = await fetch(getApiUrl(`/api/tickets/${ticketId}/stock-usage/${usageId}`), {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Could not remove stock use.");
+      setStockUsage((current) => current.filter((usage) => usage.id !== usageId));
+      toast({ title: "Stock use removed" });
+    } catch (removeError) {
+      toast({
+        title: "Could not remove stock use",
+        description: removeError instanceof Error ? removeError.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePriorityChange = (priority: TicketPriority) => {
@@ -620,6 +722,75 @@ export default function TicketDetail() {
                   <div className="col-span-2 text-sm capitalize">{ticket.channel}</div>
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-3 border-t border-border pt-4">
+              <div>
+                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Stock used</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Stock is deducted as soon as it is added to this ticket.</p>
+              </div>
+              {stockUsage.length ? (
+                <div className="space-y-2">
+                  {stockUsage.map((usage) => (
+                    <div key={usage.id} className="rounded-md border px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="min-w-0">{usage.stockItemName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{usage.quantity} {usage.unit}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remove ${usage.stockItemName} from ticket`}
+                            onClick={() => void handleRemoveStockUsage(usage.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {usage.deductedAt ? "Deducted from stock" : "Not deducted"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-muted-foreground">No stock recorded on this ticket.</p>}
+
+              {ticket.status !== "closed" && (
+                <div className="space-y-2">
+                  <Select value={selectedStockId} onValueChange={setSelectedStockId}>
+                    <SelectTrigger aria-label="Select stock item">
+                      <SelectValue placeholder="Select stock item" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stockItems.map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {item.name} · {item.quantityOnHand} {item.unit} on hand
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex gap-2">
+                    <Input
+                      aria-label="Stock quantity used"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={stockQuantity}
+                      onChange={(event) => setStockQuantity(event.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isSavingStockUsage || !selectedStockId || !Number.isSafeInteger(Number(stockQuantity)) || Number(stockQuantity) < 1}
+                      onClick={() => void handleAddStockUsage()}
+                    >
+                      {isSavingStockUsage ? "Saving..." : "Add"}
+                    </Button>
+                  </div>
+                  {!stockItems.length && <p className="text-xs text-muted-foreground">Add stock items on the Stock page first.</p>}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 pt-4 border-t border-border">

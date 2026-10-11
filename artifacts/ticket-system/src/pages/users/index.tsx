@@ -1,4 +1,4 @@
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthHeaders } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { Card } from "@/components/ui/card";
@@ -20,7 +20,7 @@ function RoleEditor({ email, currentRole, onSaved }: { email: string; currentRol
     try {
       const res = await fetch(getApiUrl("/api/users/role"), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, role }),
       });
       if (!res.ok) {
@@ -53,6 +53,7 @@ function RoleEditor({ email, currentRole, onSaved }: { email: string; currentRol
 export default function UsersPage() {
   const [users, setUsers] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", fullName: "", role: "end_user" });
   const [passwordUser, setPasswordUser] = useState<any | null>(null);
@@ -63,13 +64,24 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const res = await fetch(getApiUrl("/api/users"));
-      if (!res.ok) throw new Error('Failed to load users');
+      const res = await fetch(getApiUrl("/api/users"), { headers: getAuthHeaders() });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `Failed to load users (HTTP ${res.status}).`);
+      }
       const body = await res.json();
       setUsers(body.data || []);
     } catch (err) {
-      setUsers([]);
+      setUsers(null);
+      const message = err instanceof Error ? err.message : "Please refresh and try again.";
+      setLoadError(message);
+      toast({
+        title: "Could not load users",
+        description: message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -82,7 +94,7 @@ export default function UsersPage() {
     try {
       const res = await fetch(getApiUrl("/api/users"), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: form.email.trim(), password: form.password, fullName: form.fullName.trim() || undefined, role: form.role })
       });
       if (!res.ok) {
@@ -104,7 +116,10 @@ export default function UsersPage() {
     if (!ok) return;
 
     try {
-      const res = await fetch(getApiUrl(`/api/users/${userId}`), { method: 'DELETE' });
+      const res = await fetch(getApiUrl(`/api/users/${userId}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || 'Failed to delete user');
@@ -131,7 +146,7 @@ export default function UsersPage() {
     try {
       const res = await fetch(getApiUrl(`/api/users/${passwordUser.id}/password`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword }),
       });
       if (!res.ok) {
@@ -187,6 +202,15 @@ export default function UsersPage() {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell></TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <span>{loadError}</span>
+                      <Button variant="outline" size="sm" onClick={() => void fetchUsers()}>Retry</Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : users && users.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="h-24 text-center">No users found.</TableCell></TableRow>
               ) : (

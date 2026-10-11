@@ -43,6 +43,8 @@ const getToken = async () => {
 
 // Current authenticated user fetched from API
 type CurrentUser = { id: string; email: string; firstName?: string | null } | null;
+type StockItem = { id: number; name: string; sku: string | null; unit: string; quantityOnHand: number };
+type TicketStockUsage = { id: number; stockItemId: number; stockItemName: string; unit: string; quantity: number; deductedAt: string | null };
 
 const STATUS_OPTIONS = ['new', 'open', 'pending', 'solved', 'closed'];
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
@@ -111,6 +113,38 @@ export default function AgentHomeScreen() {
   const [editTemplateId, setEditTemplateId] = useState<number | null>(null);
   const [editTemplateFields, setEditTemplateFields] = useState<any[] | null>(null);
   const [editTemplateValues, setEditTemplateValues] = useState<Record<string, string>>({});
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [ticketStockUsage, setTicketStockUsage] = useState<TicketStockUsage[]>([]);
+  const [selectedStockId, setSelectedStockId] = useState<number | null>(null);
+  const [stockQuantity, setStockQuantity] = useState('1');
+  const [isSavingStockUsage, setIsSavingStockUsage] = useState(false);
+
+  const loadStockItems = useCallback(async () => {
+    const token = await getToken();
+    const response = await fetchWithFallback('/api/stock', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to load stock (HTTP ${response.status}).`);
+    setStockItems(payload.data ?? []);
+  }, []);
+
+  const loadTicketStockUsage = useCallback(async (ticketId: number) => {
+    const token = await getToken();
+    const response = await fetchWithFallback(`/api/tickets/${ticketId}/stock-usage`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to load ticket stock use (HTTP ${response.status}).`);
+    setTicketStockUsage(payload.data ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    void loadStockItems().catch((error) => {
+      Alert.alert('Stock unavailable', error instanceof Error ? error.message : 'Unable to load stock items.');
+    });
+  }, [currentUser?.id, loadStockItems]);
 
   const templatesQuery = useListTicketTemplates({
     query: {
@@ -198,6 +232,61 @@ export default function AgentHomeScreen() {
     setEditTemplateId(null);
     setEditTemplateFields(null);
     setEditTemplateValues({});
+    setTicketStockUsage([]);
+    setSelectedStockId(null);
+    setStockQuantity('1');
+    void loadTicketStockUsage(ticket.id).catch((error) => {
+      Alert.alert('Stock unavailable', error instanceof Error ? error.message : 'Unable to load stock used on this ticket.');
+    });
+  };
+
+  const handleAddStockUsage = async () => {
+    const quantity = Number(stockQuantity);
+    if (!editingTicket || !selectedStockId || !Number.isSafeInteger(quantity) || quantity < 1) return;
+
+    setIsSavingStockUsage(true);
+    try {
+      const token = await getToken();
+      const response = await fetchWithFallback(`/api/tickets/${editingTicket.id}/stock-usage`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ items: [{ stockItemId: selectedStockId, quantity }] }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Unable to record stock use (HTTP ${response.status}).`);
+      await loadStockItems();
+      await loadTicketStockUsage(editingTicket.id);
+      setSelectedStockId(null);
+      setStockQuantity('1');
+      Alert.alert('Stock recorded', 'The stock balance was reduced immediately.');
+    } catch (error) {
+      Alert.alert('Could not record stock', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setIsSavingStockUsage(false);
+    }
+  };
+
+  const handleRemoveStockUsage = async (usageId: number) => {
+    if (!editingTicket) return;
+    try {
+      const token = await getToken();
+      const response = await fetchWithFallback(`/api/tickets/${editingTicket.id}/stock-usage/${usageId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Unable to remove stock use (HTTP ${response.status}).`);
+      }
+      await loadStockItems();
+      await loadTicketStockUsage(editingTicket.id);
+    } catch (error) {
+      Alert.alert('Could not remove stock', error instanceof Error ? error.message : 'Please try again.');
+    }
   };
 
   const applyEditTemplate = (template: any) => {
@@ -248,6 +337,7 @@ export default function AgentHomeScreen() {
           })),
         },
       });
+      if (editStatus === 'closed') await loadStockItems();
       setEditingTicket(null);
       await refreshTickets();
     } catch (requestError) {
@@ -563,6 +653,80 @@ export default function AgentHomeScreen() {
               ))}
             </View>
 
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Stock used</Text>
+            <Text style={[styles.cardText, { color: colors.mutedForeground }]}>
+              Stock is deducted as soon as it is added to this ticket.
+            </Text>
+            {ticketStockUsage.length ? (
+              <View style={styles.stockUsageList}>
+                {ticketStockUsage.map((usage) => (
+                  <View key={usage.id} style={[styles.stockUsageRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.attachmentName, { color: colors.foreground }]}>{usage.stockItemName}</Text>
+                      <Text style={[styles.attachmentMeta, { color: colors.mutedForeground }]}>
+                        {usage.deductedAt ? 'Deducted from stock' : 'Not deducted'}
+                      </Text>
+                    </View>
+                    <View style={styles.stockUsageTrailing}>
+                      <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>{usage.quantity} {usage.unit}</Text>
+                      <Pressable
+                        onPress={() => void handleRemoveStockUsage(usage.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${usage.stockItemName} from ticket`}
+                        hitSlop={8}
+                      >
+                        <Feather name="trash-2" size={16} color={colors.destructive} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={[styles.cardText, { color: colors.mutedForeground }]}>No stock recorded for this ticket.</Text>
+            )}
+            {editingTicket?.status === 'closed' ? null : stockItems.length ? (
+              <>
+                <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollRow}>
+                  {stockItems.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => setSelectedStockId(item.id)}
+                      style={[
+                        styles.chip,
+                        { borderColor: colors.border, backgroundColor: selectedStockId === item.id ? colors.primary : colors.card },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: selectedStockId === item.id ? colors.primaryForeground : colors.foreground }]}>
+                        {item.name} ({item.quantityOnHand} {item.unit})
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <View style={styles.stockUsageActions}>
+                  <TextInput
+                    style={[styles.stockQuantityInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+                    value={stockQuantity}
+                    onChangeText={setStockQuantity}
+                    keyboardType="number-pad"
+                    placeholder="Quantity"
+                    placeholderTextColor={colors.mutedForeground}
+                    accessibilityLabel="Quantity of stock used"
+                  />
+                  <Pressable
+                    onPress={() => void handleAddStockUsage()}
+                    disabled={isSavingStockUsage || !selectedStockId || !Number.isSafeInteger(Number(stockQuantity)) || Number(stockQuantity) < 1}
+                    style={[styles.modalButton, { backgroundColor: colors.primary }, (isSavingStockUsage || !selectedStockId) && styles.disabled]}
+                  >
+                    <Text style={[styles.modalButtonText, { color: colors.primaryForeground }]}>
+                      {isSavingStockUsage ? 'Saving…' : 'Add stock'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <Text style={[styles.cardText, { color: colors.mutedForeground }]}>No stock items are available. Add them from the web Stock page.</Text>
+            )}
+
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Priority</Text>
             <View style={styles.chipRow}>
               {PRIORITY_OPTIONS.map((priority) => (
@@ -728,6 +892,11 @@ const styles = StyleSheet.create({
   attachmentInfo: { flex: 1 },
   attachmentName: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   attachmentMeta: { fontFamily: 'Inter_400Regular', fontSize: 10, marginTop: 2 },
+  stockUsageList: { gap: 7 },
+  stockUsageRow: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stockUsageTrailing: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stockUsageActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  stockQuantityInput: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, fontFamily: 'Inter_400Regular', fontSize: 14 },
   ticketActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   agentWarning: { minHeight: 38, borderWidth: 1, borderRadius: 8, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
   agentWarningText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 11 },

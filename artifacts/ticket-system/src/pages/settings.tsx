@@ -1,4 +1,4 @@
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthHeaders } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,32 +98,52 @@ export default function Settings() {
   const isAdmin = normalizedRole === "admin";
   const canManageTemplates = ["admin", "supervisor", "agent"].includes(normalizedRole);
   const loadMacros = async () => {
-    const response = await fetch(getApiUrl("/api/settings/ticket-macros"), { credentials: "include" });
-    if (response.ok) setMacros(await response.json());
+    const response = await fetch(getApiUrl("/api/settings/ticket-macros"), { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error(`Could not load ticket macros (HTTP ${response.status}).`);
+    setMacros(await response.json());
   };
   const loadMacroAnalytics = async () => {
-    const response = await fetch(getApiUrl("/api/settings/ticket-macros/analytics"), { credentials: "include" });
-    if (response.ok) setMacroAnalytics(await response.json());
+    const response = await fetch(getApiUrl("/api/settings/ticket-macros/analytics"), { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error(`Could not load macro analytics (HTTP ${response.status}).`);
+    setMacroAnalytics(await response.json());
   };
-  useEffect(() => { void loadMacros(); void loadMacroAnalytics(); }, []);
+  useEffect(() => {
+    void Promise.all([loadMacros(), loadMacroAnalytics()]).catch((error) => {
+      toast({
+        title: "Could not load ticket macros",
+        description: error instanceof Error ? error.message : "Please refresh and try again.",
+        variant: "destructive",
+      });
+    });
+  }, []);
   useEffect(() => {
     void Promise.all([
-      fetch(getApiUrl("/api/agents"), { credentials: "include" }).then((response) => response.ok ? response.json() : []),
-      fetch(getApiUrl("/api/settings/routing"), { credentials: "include" }).then((response) => response.ok ? response.json() : { onCallAgentId: null }),
-    ]).then(([agents, routing]) => {
+      fetch(getApiUrl("/api/agents"), { headers: getAuthHeaders() }),
+      fetch(getApiUrl("/api/settings/routing"), { headers: getAuthHeaders() }),
+    ]).then(async ([agentsResponse, routingResponse]) => {
+      if (!agentsResponse.ok) throw new Error(`Could not load agents (HTTP ${agentsResponse.status}).`);
+      if (!routingResponse.ok) throw new Error(`Could not load routing settings (HTTP ${routingResponse.status}).`);
+      return Promise.all([agentsResponse.json(), routingResponse.json()]);
+    }).then(([agents, routing]) => {
       setRoutingAgents(Array.isArray(agents) ? agents : []);
       setOnCallAgentId(routing?.onCallAgentId == null ? "" : String(routing.onCallAgentId));
       setBackupAgentId(routing?.backupAgentId == null ? "" : String(routing.backupAgentId));
+    }).catch((error) => {
+      toast({
+        title: "Could not load routing settings",
+        description: error instanceof Error ? error.message : "Please refresh and try again.",
+        variant: "destructive",
+      });
     });
-  }, []);
+  }, [toast]);
   const saveRouting = async () => {
     setRoutingSaving(true);
     try {
       const response = await fetch(getApiUrl("/api/settings/routing"), {
-        method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ onCallAgentId: onCallAgentId || null, backupAgentId: backupAgentId || null }),
       });
-      if (!response.ok) throw new Error("Unable to save routing settings");
+      if (!response.ok) throw new Error(`Unable to save routing settings (HTTP ${response.status}).`);
       toast({ title: "Routing settings saved" });
     } catch (error) {
       toast({ title: "Could not save routing settings", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
@@ -134,19 +154,30 @@ export default function Settings() {
   const saveMacro = async () => {
     if (!macroForm.name.trim() || !macroForm.content.trim()) return;
     const response = await fetch(getApiUrl("/api/settings/ticket-macros"), {
-      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(macroForm),
     });
     if (response.ok) {
       setMacroForm({ name: "", content: "", scope: "all" });
-      await loadMacros();
-      await loadMacroAnalytics();
-      toast({ title: "Macro added" });
-    } else toast({ title: "Could not save macro", variant: "destructive" });
+      try {
+        await Promise.all([loadMacros(), loadMacroAnalytics()]);
+        toast({ title: "Macro added" });
+      } catch (error) {
+        toast({
+          title: "Macro added, but refresh failed",
+          description: error instanceof Error ? error.message : "Refresh the page to see updated data.",
+          variant: "destructive",
+        });
+      }
+    } else toast({ title: "Could not save macro", description: `Request failed (HTTP ${response.status}).`, variant: "destructive" });
   };
   const deleteMacro = async (id: number) => {
-    const response = await fetch(getApiUrl(`/api/settings/ticket-macros/${id}`), { method: "DELETE", credentials: "include" });
+    const response = await fetch(getApiUrl(`/api/settings/ticket-macros/${id}`), {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
     if (response.ok) await loadMacros();
+    else toast({ title: "Could not delete macro", description: `Request failed (HTTP ${response.status}).`, variant: "destructive" });
   };
 
   const startEditing = (policy: NonNullable<typeof policies>[number]) => {

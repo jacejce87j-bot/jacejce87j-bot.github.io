@@ -543,7 +543,7 @@ router.get("/ticket-macros/analytics", async (req, res) => {
   res.json(rows.map((row) => ({
     ...row,
     usageCount: Number(row.usageCount),
-    lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+    lastUsedAt: row.lastUsedAt ? new Date(row.lastUsedAt).toISOString() : null,
   })));
 });
 

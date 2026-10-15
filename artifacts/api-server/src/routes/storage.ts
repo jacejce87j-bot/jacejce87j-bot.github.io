@@ -194,6 +194,10 @@ router.get('/storage/objects/*path', async (req: Request, res: Response) => {
 
       res.status(response.status);
       response.headers.forEach((value, key) => res.setHeader(key, value));
+      const contentType = response.headers.get('content-type') ?? '';
+      if (req.query.inline === 'true' && contentType.toLowerCase().startsWith('image/')) {
+        res.setHeader('Content-Disposition', 'inline');
+      }
 
       if (response.body) {
         const nodeStream = Readable.fromWeb(
@@ -222,9 +226,11 @@ router.get('/storage/objects/*path', async (req: Request, res: Response) => {
     }
 
     const row = result.rows[0];
-    res.setHeader('Content-Type', row.content_type || 'application/octet-stream');
+    const contentType = row.content_type || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', String(row.size ?? Buffer.byteLength(row.data)));
-    res.setHeader('Content-Disposition', `attachment; filename="${row.filename}"`);
+    const inlineImage = req.query.inline === 'true' && contentType.toLowerCase().startsWith('image/');
+    res.setHeader('Content-Disposition', inlineImage ? 'inline' : `attachment; filename="${row.filename}"`);
     res.status(200).send(row.data);
   } catch (error) {
     req.log.error({ err: error }, 'Error serving object');

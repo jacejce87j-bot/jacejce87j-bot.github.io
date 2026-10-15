@@ -100,6 +100,7 @@ export default function TicketDetail() {
   const [kbaContent, setKbaContent] = useState("");
   const [isCreatingKba, setIsCreatingKba] = useState(false);
   const [isSavingAttachment, setIsSavingAttachment] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<TicketAttachment | null>(null);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [stockUsage, setStockUsage] = useState<TicketStockUsage[]>([]);
   const [selectedStockId, setSelectedStockId] = useState("");
@@ -314,11 +315,22 @@ export default function TicketDetail() {
     });
   };
 
-  const attachmentUrl = (objectPath: string) => {
+  const attachmentUrl = (objectPath: string, inline = false) => {
     const relativePath = objectPath.replace(/^\/objects\//, "");
     const token = localStorage.getItem("userToken") || localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
     const url = getApiUrl(`/api/storage/objects/${relativePath}`);
-    return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+    const params = new URLSearchParams();
+    if (token) params.set("token", token);
+    if (inline) params.set("inline", "true");
+    const query = params.toString();
+    return query ? `${url}?${query}` : url;
+  };
+
+  const isImageAttachment = (attachment: TicketAttachment) =>
+    attachment.contentType?.toLowerCase().startsWith("image/") ?? false;
+
+  const showAttachmentPreview = (attachment: TicketAttachment) => {
+    if (isImageAttachment(attachment)) setPreviewAttachment(attachment);
   };
 
   const formatFileSize = (size: number) => {
@@ -416,6 +428,21 @@ export default function TicketDetail() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={previewAttachment !== null} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="truncate pr-8">{previewAttachment?.name ?? "Image preview"}</DialogTitle>
+            </DialogHeader>
+            {previewAttachment && (
+              <img
+                src={attachmentUrl(previewAttachment.objectPath, true)}
+                alt={previewAttachment.name}
+                className="max-h-[70vh] w-full rounded object-contain"
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+
         {/* Merged-into banner */}
         {ticket.mergedIntoId && (
           <div className="bg-violet-50 dark:bg-violet-950/40 border-b border-violet-200 dark:border-violet-800 px-8 py-3 flex items-center gap-3">
@@ -488,20 +515,36 @@ export default function TicketDetail() {
                   {ticket.attachments?.length ? (
                     <div className="grid gap-2 sm:grid-cols-2">
                       {ticket.attachments.map((attachment) => (
-                        <a
-                          key={`${attachment.objectPath}-${attachment.uploadedAt}`}
-                          href={attachmentUrl(attachment.objectPath)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:bg-muted/50"
-                        >
-                          <FileText className="h-8 w-8 shrink-0 text-primary" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">{attachment.name}</span>
-                            <span className="text-xs text-muted-foreground">{formatFileSize(attachment.size)} · {attachment.contentType}</span>
-                          </span>
-                          <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        </a>
+                        <div key={`${attachment.objectPath}-${attachment.uploadedAt}`} className="overflow-hidden rounded-md border">
+                          {isImageAttachment(attachment) && (
+                            <button
+                              type="button"
+                              onClick={() => showAttachmentPreview(attachment)}
+                              className="block w-full cursor-zoom-in bg-muted/30 p-2"
+                              aria-label={`Preview ${attachment.name}`}
+                            >
+                              <img
+                                src={attachmentUrl(attachment.objectPath, true)}
+                                alt={attachment.name}
+                                className="mx-auto max-h-48 max-w-full rounded object-contain"
+                                loading="lazy"
+                              />
+                            </button>
+                          )}
+                          <a
+                            href={attachmentUrl(attachment.objectPath)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-3 p-3 transition-colors hover:bg-muted/50"
+                          >
+                            <FileText className="h-8 w-8 shrink-0 text-primary" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">{attachment.name}</span>
+                              <span className="text-xs text-muted-foreground">{formatFileSize(attachment.size)} · {attachment.contentType}</span>
+                            </span>
+                            <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          </a>
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -544,22 +587,38 @@ export default function TicketDetail() {
                           {comment.attachments?.length > 0 && (
                             <div className="mt-4 grid gap-2 sm:grid-cols-2">
                               {comment.attachments.map((attachment) => (
-                                <a
-                                  key={`${attachment.objectPath}-${attachment.uploadedAt}`}
-                                  href={attachmentUrl(attachment.objectPath)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex items-center gap-2 rounded-md border bg-background p-2 text-sm transition-colors hover:bg-muted/50"
-                                >
-                                  <FileText className="h-5 w-5 shrink-0 text-primary" />
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block truncate font-medium">{attachment.name}</span>
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                      {formatFileSize(attachment.size)} · {attachment.contentType}
+                                <div key={`${attachment.objectPath}-${attachment.uploadedAt}`} className="overflow-hidden rounded-md border bg-background text-sm">
+                                  {isImageAttachment(attachment) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => showAttachmentPreview(attachment)}
+                                      className="block w-full cursor-zoom-in bg-muted/30 p-2"
+                                      aria-label={`Preview ${attachment.name}`}
+                                    >
+                                      <img
+                                        src={attachmentUrl(attachment.objectPath, true)}
+                                        alt={attachment.name}
+                                        className="mx-auto max-h-40 max-w-full rounded object-contain"
+                                        loading="lazy"
+                                      />
+                                    </button>
+                                  )}
+                                  <a
+                                    href={attachmentUrl(attachment.objectPath)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-2 p-2 transition-colors hover:bg-muted/50"
+                                  >
+                                    <FileText className="h-5 w-5 shrink-0 text-primary" />
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate font-medium">{attachment.name}</span>
+                                      <span className="block truncate text-xs text-muted-foreground">
+                                        {formatFileSize(attachment.size)} · {attachment.contentType}
+                                      </span>
                                     </span>
-                                  </span>
-                                  <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                </a>
+                                    <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  </a>
+                                </div>
                               ))}
                             </div>
                           )}

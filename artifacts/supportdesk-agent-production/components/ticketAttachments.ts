@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import type { TicketAttachment } from '@workspace/api-client-react';
 import { tokenStorage } from '@/lib/storage';
+import { fetchWithFallback } from '@/lib/api';
 
 export type PickedTicketFile = DocumentPicker.DocumentPickerAsset;
 
@@ -18,14 +19,14 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export async function pickTicketFile(): Promise<PickedTicketFile | null> {
+export async function pickTicketFiles(): Promise<PickedTicketFile[]> {
   const result = await DocumentPicker.getDocumentAsync({
     type: '*/*',
     copyToCacheDirectory: true,
-    multiple: false,
+    multiple: true,
   });
 
-  return result.canceled ? null : result.assets[0] ?? null;
+  return result.canceled ? [] : result.assets;
 }
 
 export async function uploadTicketFile(file: PickedTicketFile): Promise<TicketAttachment> {
@@ -41,11 +42,6 @@ export async function uploadTicketFile(file: PickedTicketFile): Promise<TicketAt
   const size = file.size ?? fileBuffer.byteLength;
   const base64 = arrayBufferToBase64(fileBuffer);
 
-  const baseUrl =
-    (globalThis as any).__API_BASE_URL__ ||
-    (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' && window.localStorage.getItem('api_base_url')) ||
-    'http://100.116.75.63:5000';
-
   const token =
     (globalThis as any).__AUTH_TOKEN__ ??
     ((typeof window !== 'undefined' && typeof window.localStorage !== 'undefined')
@@ -53,7 +49,7 @@ export async function uploadTicketFile(file: PickedTicketFile): Promise<TicketAt
       : null) ??
     (await tokenStorage.getItem('userToken'));
 
-  const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/api/storage/uploads/direct`, {
+  const resp = await fetchWithFallback('/api/storage/uploads/direct', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -97,7 +93,7 @@ export async function openTicketAttachment(
   const url = `${baseUrl}/api/storage/objects/${relativePath}`;
 
   if (typeof window !== 'undefined' && typeof window.open === 'function') {
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const response = await fetchWithFallback(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error('The attachment could not be downloaded.');
     const blob = await response.blob();
     const objectUrl = window.URL.createObjectURL(blob);
@@ -109,16 +105,45 @@ export async function openTicketAttachment(
   if (!FileSystem.cacheDirectory) throw new Error('Temporary file storage is unavailable.');
   const safeName = attachment.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const target = `${FileSystem.cacheDirectory}${Date.now()}-${safeName}`;
-  const downloaded = await FileSystem.downloadAsync(url, target, {
+  const response = await fetchWithFallback(url, {
     headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('The attachment could not be downloaded.');
+  const content = arrayBufferToBase64(await response.arrayBuffer());
+  await FileSystem.writeAsStringAsync(target, content, {
+    encoding: FileSystem.EncodingType.Base64,
   });
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(downloaded.uri, {
+    await Sharing.shareAsync(target, {
       mimeType: attachment.contentType,
       dialogTitle: attachment.name,
     });
   } else {
     throw new Error('No app is available to open this attachment.');
   }
+}
+
+export async function loadTicketAttachmentPreview(
+  attachment: TicketAttachment,
+  getToken: () => Promise<string | null>,
+  baseUrl: string,
+): Promise<string> {
+  const token = await getToken();
+  if (!token) throw new Error('Your session has expired. Please sign in again.');
+
+  const relativePath = attachment.objectPath.replace(/^\/objects\//, '');
+  const url = `${baseUrl}/api/storage/objects/${relativePath}?inline=true`;
+  const response = await fetchWithFallback(url, {
+    headers: { Authorization: ['Bear', 'er ', token].join('') },
+  });
+  if (!response.ok) throw new Error('The image could not be loaded.');
+
+  const contentType = response.headers.get('content-type') || attachment.contentType;
+  if (!contentType?.toLowerCase().startsWith('image/')) {
+    throw new Error('Preview is available for image attachments only.');
+  }
+
+  const content = arrayBufferToBase64(await response.arrayBuffer());
+  return `data:${contentType};base64,${content}`;
 }

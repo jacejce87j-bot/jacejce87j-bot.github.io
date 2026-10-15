@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -29,7 +30,7 @@ import {
   type TicketAttachment,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { formatAttachmentSize, openTicketAttachment, pickTicketFiles, uploadTicketFile } from '@/components/ticketAttachments';
+import { formatAttachmentSize, loadTicketAttachmentPreview, openTicketAttachment, pickTicketFiles, uploadTicketFile } from '@/components/ticketAttachments';
 import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
 import { fetchWithFallback } from '@/lib/api';
 
@@ -101,6 +102,8 @@ export default function AgentHomeScreen() {
   const [activeAgentPicker, setActiveAgentPicker] = useState<number | null>(null);
   const [uploadingTicketId, setUploadingTicketId] = useState<number | null>(null);
   const [openingAttachmentKey, setOpeningAttachmentKey] = useState<string | null>(null);
+  const [previewedImage, setPreviewedImage] = useState<{ name: string; uri: string } | null>(null);
+  const [previewingAttachmentKey, setPreviewingAttachmentKey] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'open' | 'pending' | 'on_hold' | 'solved' | 'closed'>('active');
 
   // Edit Modal Form State
@@ -406,6 +409,19 @@ export default function AgentHomeScreen() {
     }
   };
 
+  const handlePreviewAttachment = async (attachment: TicketAttachment) => {
+    const key = `${attachment.objectPath}-${attachment.uploadedAt}`;
+    setPreviewingAttachmentKey(key);
+    try {
+      const uri = await loadTicketAttachmentPreview(attachment, getToken, baseUrl ?? '');
+      setPreviewedImage({ name: attachment.name, uri });
+    } catch (requestError) {
+      Alert.alert('Image unavailable', requestError instanceof Error ? requestError.message : 'The image could not be opened.');
+    } finally {
+      setPreviewingAttachmentKey(null);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -523,22 +539,41 @@ export default function AgentHomeScreen() {
                     {ticket.attachments.map((attachment) => {
                       const key = `${attachment.objectPath}-${attachment.uploadedAt}`;
                       return (
-                        <Pressable
-                          key={key}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open attachment ${attachment.name}`}
-                          onPress={() => void handleOpenAttachment(attachment)}
-                          style={[styles.attachmentRow, { backgroundColor: colors.background, borderColor: colors.border }]}
-                        >
-                          <Feather name="file-text" size={15} color={colors.primary} />
-                          <View style={styles.attachmentInfo}>
-                            <Text style={[styles.attachmentName, { color: colors.foreground }]} numberOfLines={1}>{attachment.name}</Text>
-                            <Text style={[styles.attachmentMeta, { color: colors.mutedForeground }]}>
-                              {formatAttachmentSize(attachment.size)} · {attachment.contentType}
-                            </Text>
-                          </View>
-                          {openingAttachmentKey === key ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.mutedForeground} />}
-                        </Pressable>
+                        <View key={key}>
+                          {attachment.contentType?.toLowerCase().startsWith('image/') && (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Preview image ${attachment.name}`}
+                              onPress={() => void handlePreviewAttachment(attachment)}
+                              disabled={previewingAttachmentKey === key}
+                              style={[styles.imagePreviewButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+                            >
+                              {previewingAttachmentKey === key ? (
+                                <ActivityIndicator color={colors.primary} />
+                              ) : (
+                                <Feather name="image" size={18} color={colors.primary} />
+                              )}
+                              <Text style={[styles.imagePreviewText, { color: colors.primary }]}>
+                                {previewingAttachmentKey === key ? 'Loading preview…' : 'View image'}
+                              </Text>
+                            </Pressable>
+                          )}
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Download attachment ${attachment.name}`}
+                            onPress={() => void handleOpenAttachment(attachment)}
+                            style={[styles.attachmentRow, { backgroundColor: colors.background, borderColor: colors.border }]}
+                          >
+                            <Feather name="file-text" size={15} color={colors.primary} />
+                            <View style={styles.attachmentInfo}>
+                              <Text style={[styles.attachmentName, { color: colors.foreground }]} numberOfLines={1}>{attachment.name}</Text>
+                              <Text style={[styles.attachmentMeta, { color: colors.mutedForeground }]}>
+                                {formatAttachmentSize(attachment.size)} · {attachment.contentType}
+                              </Text>
+                            </View>
+                            {openingAttachmentKey === key ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.mutedForeground} />}
+                          </Pressable>
+                        </View>
                       );
                     })}
                   </View>
@@ -614,6 +649,32 @@ export default function AgentHomeScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <Modal visible={previewedImage !== null} animationType="fade" transparent onRequestClose={() => setPreviewedImage(null)}>
+        <View style={styles.imagePreviewOverlay}>
+          <View style={[styles.imagePreviewModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.imagePreviewHeader}>
+              <Text style={[styles.imagePreviewTitle, { color: colors.foreground }]} numberOfLines={1}>{previewedImage?.name}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close image preview"
+                onPress={() => setPreviewedImage(null)}
+                hitSlop={10}
+              >
+                <Feather name="x" size={22} color={colors.foreground} />
+              </Pressable>
+            </View>
+            {previewedImage && (
+              <Image
+                source={{ uri: previewedImage.uri }}
+                style={styles.previewImage}
+                resizeMode="contain"
+                accessibilityLabel={previewedImage.name}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Edit Ticket Modal */}
       <Modal visible={!!editingTicket} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditingTicket(null)}>
@@ -888,10 +949,17 @@ const styles = StyleSheet.create({
   ticketDetailLabel: { fontFamily: 'Inter_400Regular', fontSize: 11 },
   ticketDetailValue: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   attachments: { gap: 7, marginTop: 11 },
+  imagePreviewButton: { minHeight: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, marginBottom: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  imagePreviewText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   attachmentRow: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 8 },
   attachmentInfo: { flex: 1 },
   attachmentName: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   attachmentMeta: { fontFamily: 'Inter_400Regular', fontSize: 10, marginTop: 2 },
+  imagePreviewOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.72)', justifyContent: 'center', padding: 20 },
+  imagePreviewModal: { maxHeight: '82%', borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
+  imagePreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  imagePreviewTitle: { flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  previewImage: { width: '100%', height: 420 },
   stockUsageList: { gap: 7 },
   stockUsageRow: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
   stockUsageTrailing: { flexDirection: 'row', alignItems: 'center', gap: 10 },

@@ -317,7 +317,8 @@ export default function TicketDetail() {
   const attachmentUrl = (objectPath: string) => {
     const relativePath = objectPath.replace(/^\/objects\//, "");
     const token = localStorage.getItem("userToken") || localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
-    return token ? `/api/storage/objects/${relativePath}?token=${encodeURIComponent(token)}` : `/api/storage/objects/${relativePath}`;
+    const url = getApiUrl(`/api/storage/objects/${relativePath}`);
+    return token ? `${url}?token=${encodeURIComponent(token)}` : url;
   };
 
   const formatFileSize = (size: number) => {

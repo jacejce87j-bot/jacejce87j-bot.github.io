@@ -1,7 +1,13 @@
 import { Router } from "express";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, stockItemsTable, stockMovementsTable } from "@workspace/db";
+import {
+  db,
+  fieldAgentStockTable,
+  fieldAgentsTable,
+  stockItemsTable,
+  stockMovementsTable,
+} from "@workspace/db";
 
 const router = Router();
 
@@ -17,12 +23,199 @@ const adjustStockSchema = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 
+const createFieldAgentSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+});
+
+const transferStockSchema = z.object({
+  fieldAgentId: z.number().int().positive(),
+  stockItemId: z.number().int().positive(),
+  quantity: z.number().int().positive().max(100_000),
+});
+
 router.get("/stock", async (_req, res) => {
   try {
     const items = await db.select().from(stockItemsTable).orderBy(asc(stockItemsTable.name));
-    res.json({ data: items });
+    const allocated = await db
+      .select({
+        stockItemId: fieldAgentStockTable.stockItemId,
+        quantity: fieldAgentStockTable.quantityOnHand,
+      })
+      .from(fieldAgentStockTable);
+    const allocatedByItem = new Map<number, number>();
+    for (const row of allocated) {
+      allocatedByItem.set(row.stockItemId, (allocatedByItem.get(row.stockItemId) ?? 0) + row.quantity);
+    }
+    res.json({
+      data: items.map((item) => ({
+        ...item,
+        allocatedToFieldAgents: allocatedByItem.get(item.id) ?? 0,
+      })),
+    });
   } catch {
     res.status(500).json({ error: "Unable to load stock items." });
+  }
+});
+
+router.get("/stock/field-agents", async (_req, res) => {
+  try {
+    const agents = await db.select().from(fieldAgentsTable).orderBy(asc(fieldAgentsTable.name));
+    const balances = await db
+      .select({
+        fieldAgentId: fieldAgentStockTable.fieldAgentId,
+        stockItemId: fieldAgentStockTable.stockItemId,
+        stockItemName: stockItemsTable.name,
+        sku: stockItemsTable.sku,
+        unit: stockItemsTable.unit,
+        quantityOnHand: fieldAgentStockTable.quantityOnHand,
+      })
+      .from(fieldAgentStockTable)
+      .innerJoin(stockItemsTable, eq(fieldAgentStockTable.stockItemId, stockItemsTable.id))
+      .orderBy(asc(stockItemsTable.name));
+    const balancesByAgent = new Map<number, typeof balances>();
+    for (const balance of balances) {
+      const current = balancesByAgent.get(balance.fieldAgentId) ?? [];
+      current.push(balance);
+      balancesByAgent.set(balance.fieldAgentId, current);
+    }
+    res.json({
+      data: agents.map((agent) => ({
+        ...agent,
+        inventory: balancesByAgent.get(agent.id) ?? [],
+      })),
+    });
+  } catch {
+    res.status(500).json({ error: "Unable to load Field Agents." });
+  }
+});
+
+router.post("/stock/field-agents", async (req, res) => {
+  if (!["admin", "supervisor"].includes(req.user?.role ?? "")) {
+    res.status(403).json({ error: "Only administrators and supervisors can add Field Agents." });
+    return;
+  }
+  const parsed = createFieldAgentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Provide a Field Agent name." });
+    return;
+  }
+  try {
+    const [agent] = await db.insert(fieldAgentsTable).values({ name: parsed.data.name }).returning();
+    res.status(201).json({ agent });
+  } catch {
+    res.status(500).json({ error: "Unable to add Field Agent." });
+  }
+});
+
+router.post("/stock/transfers", async (req, res) => {
+  if (!["admin", "supervisor"].includes(req.user?.role ?? "")) {
+    res.status(403).json({ error: "Only administrators and supervisors can allocate stock to Field Agents." });
+    return;
+  }
+  const parsed = transferStockSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Select a Field Agent and stock item, and enter a positive quantity." });
+    return;
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [agent] = await tx
+        .select()
+        .from(fieldAgentsTable)
+        .where(eq(fieldAgentsTable.id, parsed.data.fieldAgentId))
+        .for("update");
+      if (!agent) return { error: "agent_not_found" as const };
+
+      const [item] = await tx
+        .select()
+        .from(stockItemsTable)
+        .where(eq(stockItemsTable.id, parsed.data.stockItemId))
+        .for("update");
+      if (!item) return { error: "stock_not_found" as const };
+      if (item.quantityOnHand < parsed.data.quantity) {
+        return {
+          error: "insufficient_stock" as const,
+          details: `${item.name}: need ${parsed.data.quantity}, have ${item.quantityOnHand}`,
+        };
+      }
+
+      const [balance] = await tx
+        .select()
+        .from(fieldAgentStockTable)
+        .where(and(
+          eq(fieldAgentStockTable.fieldAgentId, agent.id),
+          eq(fieldAgentStockTable.stockItemId, item.id),
+        ))
+        .for("update");
+
+      const transferredAt = new Date();
+      await tx
+        .update(stockItemsTable)
+        .set({ quantityOnHand: item.quantityOnHand - parsed.data.quantity, updatedAt: transferredAt })
+        .where(eq(stockItemsTable.id, item.id));
+      if (balance) {
+        await tx
+          .update(fieldAgentStockTable)
+          .set({
+            quantityOnHand: balance.quantityOnHand + parsed.data.quantity,
+            updatedAt: transferredAt,
+          })
+          .where(and(
+            eq(fieldAgentStockTable.fieldAgentId, agent.id),
+            eq(fieldAgentStockTable.stockItemId, item.id),
+          ));
+      } else {
+        await tx.insert(fieldAgentStockTable).values({
+          fieldAgentId: agent.id,
+          stockItemId: item.id,
+          quantityOnHand: parsed.data.quantity,
+          updatedAt: transferredAt,
+        });
+      }
+      await tx.insert(stockMovementsTable).values([
+        {
+          stockItemId: item.id,
+          movementType: "transfer_to_field_agent",
+          quantityDelta: -parsed.data.quantity,
+          reason: `Transferred to ${agent.name}`,
+          recordedBy: req.user?.id ?? null,
+          createdAt: transferredAt,
+        },
+        {
+          stockItemId: item.id,
+          fieldAgentId: agent.id,
+          movementType: "received_by_field_agent",
+          quantityDelta: parsed.data.quantity,
+          reason: "Received from Orion Stock",
+          recordedBy: req.user?.id ?? null,
+          createdAt: transferredAt,
+        },
+      ]);
+      return {
+        error: "ok" as const,
+        item: { ...item, quantityOnHand: item.quantityOnHand - parsed.data.quantity },
+        fieldAgent: agent,
+        quantity: parsed.data.quantity,
+      };
+    });
+    if (result.error === "agent_not_found") {
+      res.status(404).json({ error: "Field Agent not found." });
+      return;
+    }
+    if (result.error === "stock_not_found") {
+      res.status(404).json({ error: "Stock item not found." });
+      return;
+    }
+    if (result.error === "insufficient_stock") {
+      res.status(409).json({ error: `Insufficient Orion Stock: ${result.details}.` });
+      return;
+    }
+    res.status(201).json({
+      transfer: { item: result.item, fieldAgent: result.fieldAgent, quantity: result.quantity },
+    });
+  } catch {
+    res.status(500).json({ error: "Unable to transfer stock to the Field Agent." });
   }
 });
 
@@ -125,8 +318,20 @@ router.get("/stock/:id/movements", async (req, res) => {
   }
   try {
     const movements = await db
-      .select()
+      .select({
+        id: stockMovementsTable.id,
+        stockItemId: stockMovementsTable.stockItemId,
+        fieldAgentId: stockMovementsTable.fieldAgentId,
+        fieldAgentName: fieldAgentsTable.name,
+        ticketId: stockMovementsTable.ticketId,
+        movementType: stockMovementsTable.movementType,
+        quantityDelta: stockMovementsTable.quantityDelta,
+        reason: stockMovementsTable.reason,
+        recordedBy: stockMovementsTable.recordedBy,
+        createdAt: stockMovementsTable.createdAt,
+      })
       .from(stockMovementsTable)
+      .leftJoin(fieldAgentsTable, eq(stockMovementsTable.fieldAgentId, fieldAgentsTable.id))
       .where(eq(stockMovementsTable.stockItemId, id))
       .orderBy(sql`${stockMovementsTable.createdAt} DESC`, sql`${stockMovementsTable.id} DESC`)
       .limit(100);

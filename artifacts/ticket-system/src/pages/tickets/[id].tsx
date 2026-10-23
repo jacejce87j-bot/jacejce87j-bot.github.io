@@ -35,11 +35,18 @@ import { MacroSelector } from "@/components/macro-selector";
 import { useSupportUser } from "@/hooks/use-support-user";
 
 type StockItem = { id: number; name: string; sku: string | null; unit: string; quantityOnHand: number };
+type FieldAgent = {
+  id: number;
+  name: string;
+  inventory: { stockItemId: number; quantityOnHand: number }[];
+};
 type TicketStockUsage = {
   id: number;
   stockItemId: number;
   stockItemName: string;
   unit: string;
+  fieldAgentId: number | null;
+  fieldAgentName: string | null;
   quantity: number;
   deductedAt: string | null;
 };
@@ -102,7 +109,9 @@ export default function TicketDetail() {
   const [isSavingAttachment, setIsSavingAttachment] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<TicketAttachment | null>(null);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
   const [stockUsage, setStockUsage] = useState<TicketStockUsage[]>([]);
+  const [selectedFieldAgentId, setSelectedFieldAgentId] = useState("");
   const [selectedStockId, setSelectedStockId] = useState("");
   const [stockQuantity, setStockQuantity] = useState("1");
   const [isSavingStockUsage, setIsSavingStockUsage] = useState(false);
@@ -130,18 +139,21 @@ export default function TicketDetail() {
 
   const loadStock = async () => {
     try {
-      const [stockResponse, usageResponse] = await Promise.all([
+      const [stockResponse, agentsResponse, usageResponse] = await Promise.all([
         fetch(getApiUrl("/api/stock"), { headers: getAuthHeaders() }),
+        fetch(getApiUrl("/api/stock/field-agents"), { headers: getAuthHeaders() }),
         fetch(getApiUrl(`/api/tickets/${ticketId}/stock-usage`), { headers: getAuthHeaders() }),
       ]);
-      const [stockPayload, usagePayload] = await Promise.all([
+      const [stockPayload, agentsPayload, usagePayload] = await Promise.all([
         stockResponse.json().catch(() => ({})),
+        agentsResponse.json().catch(() => ({})),
         usageResponse.json().catch(() => ({})),
       ]);
-      if (!stockResponse.ok || !usageResponse.ok) {
-        throw new Error(stockPayload.error || usagePayload.error || "Could not load ticket stock details.");
+      if (!stockResponse.ok || !agentsResponse.ok || !usageResponse.ok) {
+        throw new Error(stockPayload.error || agentsPayload.error || usagePayload.error || "Could not load ticket stock details.");
       }
       setStockItems(stockPayload.data ?? []);
+      setFieldAgents(agentsPayload.data ?? []);
       setStockUsage(usagePayload.data ?? []);
     } catch (loadError) {
       toast({
@@ -158,21 +170,24 @@ export default function TicketDetail() {
 
   const handleAddStockUsage = async () => {
     const quantity = Number(stockQuantity);
-    if (!selectedStockId || !Number.isSafeInteger(quantity) || quantity < 1) return;
+    if (!selectedFieldAgentId || !selectedStockId || !Number.isSafeInteger(quantity) || quantity < 1) return;
 
     setIsSavingStockUsage(true);
     try {
       const response = await fetch(getApiUrl(`/api/tickets/${ticketId}/stock-usage`), {
         method: "POST",
         headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ items: [{ stockItemId: Number(selectedStockId), quantity }] }),
+        body: JSON.stringify({
+          fieldAgentId: Number(selectedFieldAgentId),
+          items: [{ stockItemId: Number(selectedStockId), quantity }],
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Could not record ticket stock usage.");
       setSelectedStockId("");
       setStockQuantity("1");
       await loadStock();
-      toast({ title: "Stock use recorded", description: "The stock balance was reduced immediately." });
+      toast({ title: "Stock use recorded", description: "The Field Agent’s balance was reduced immediately." });
     } catch (saveError) {
       toast({
         title: "Could not record stock use",
@@ -787,7 +802,7 @@ export default function TicketDetail() {
             <div className="space-y-3 border-t border-border pt-4">
               <div>
                 <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Stock used</h3>
-                <p className="mt-1 text-xs text-muted-foreground">Stock is deducted as soon as it is added to this ticket.</p>
+                <p className="mt-1 text-xs text-muted-foreground">The selected Field Agent’s balance is deducted when stock is added.</p>
               </div>
               {stockUsage.length ? (
                 <div className="space-y-2">
@@ -809,7 +824,9 @@ export default function TicketDetail() {
                         </div>
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {usage.deductedAt ? "Deducted from stock" : "Not deducted"}
+                        {usage.deductedAt
+                          ? `Deducted from ${usage.fieldAgentName ?? "legacy stock"}`
+                          : "Not deducted"}
                       </div>
                     </div>
                   ))}
@@ -818,16 +835,41 @@ export default function TicketDetail() {
 
               {ticket.status !== "closed" && (
                 <div className="space-y-2">
-                  <Select value={selectedStockId} onValueChange={setSelectedStockId}>
-                    <SelectTrigger aria-label="Select stock item">
-                      <SelectValue placeholder="Select stock item" />
+                  <Select
+                    value={selectedFieldAgentId}
+                    onValueChange={(value) => {
+                      setSelectedFieldAgentId(value);
+                      setSelectedStockId("");
+                    }}
+                  >
+                    <SelectTrigger aria-label="Select Field Agent">
+                      <SelectValue placeholder="Select Field Agent" />
                     </SelectTrigger>
                     <SelectContent>
-                      {stockItems.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.name} · {item.quantityOnHand} {item.unit} on hand
-                        </SelectItem>
+                      {fieldAgents.map((agent) => (
+                        <SelectItem key={agent.id} value={String(agent.id)}>{agent.name}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedStockId} onValueChange={setSelectedStockId}>
+                    <SelectTrigger aria-label="Select stock item">
+                      <SelectValue placeholder={selectedFieldAgentId ? "Select stock item" : "Select a Field Agent first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stockItems
+                        .filter((item) => {
+                          const agent = fieldAgents.find((entry) => String(entry.id) === selectedFieldAgentId);
+                          return agent?.inventory.some((balance) => balance.stockItemId === item.id && balance.quantityOnHand > 0);
+                        })
+                        .map((item) => {
+                          const agent = fieldAgents.find((entry) => String(entry.id) === selectedFieldAgentId);
+                          const available = agent?.inventory.find((balance) => balance.stockItemId === item.id)?.quantityOnHand ?? 0;
+                          return (
+                            <SelectItem key={item.id} value={String(item.id)}>
+                              {item.name} · {available} {item.unit} with Field Agent
+                            </SelectItem>
+                          );
+                        })}
                     </SelectContent>
                   </Select>
                   <div className="flex gap-2">
@@ -842,13 +884,20 @@ export default function TicketDetail() {
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={isSavingStockUsage || !selectedStockId || !Number.isSafeInteger(Number(stockQuantity)) || Number(stockQuantity) < 1}
+                      disabled={isSavingStockUsage || !selectedFieldAgentId || !selectedStockId || !Number.isSafeInteger(Number(stockQuantity)) || Number(stockQuantity) < 1}
                       onClick={() => void handleAddStockUsage()}
                     >
                       {isSavingStockUsage ? "Saving..." : "Add"}
                     </Button>
                   </div>
                   {!stockItems.length && <p className="text-xs text-muted-foreground">Add stock items on the Stock page first.</p>}
+                  {!fieldAgents.length && <p className="text-xs text-muted-foreground">Add Field Agents on the Stock page first.</p>}
+                  {!!fieldAgents.length && !stockItems.some((item) => {
+                    const agent = fieldAgents.find((entry) => String(entry.id) === selectedFieldAgentId);
+                    return agent?.inventory.some((balance) => balance.stockItemId === item.id && balance.quantityOnHand > 0);
+                  }) && selectedFieldAgentId && (
+                    <p className="text-xs text-muted-foreground">No stock has been allocated to this Field Agent.</p>
+                  )}
                 </div>
               )}
             </div>

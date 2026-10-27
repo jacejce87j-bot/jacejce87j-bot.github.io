@@ -579,7 +579,13 @@ router.get("/:id", async (req, res) => {
 // ─── UPDATE TICKET ────────────────────────────────────────────────────────────
 router.patch("/:id", async (req, res) => {
   const { id } = UpdateTicketParams.parse({ id: Number(req.params.id) });
-  const body = UpdateTicketBody.parse(req.body);
+  const bodyResult = UpdateTicketBody.safeParse(
+    req.body?.priority === "medium" ? { ...req.body, priority: "normal" } : req.body,
+  );
+  if (!bodyResult.success) {
+    return res.status(400).json({ error: "Invalid ticket update.", details: bodyResult.error.issues });
+  }
+  const body = bodyResult.data;
 
   const [existing] = await db.select().from(ticketsTable).where(eq(ticketsTable.id, id));
   if (!existing) return res.status(404).json({ error: "Ticket not found" });

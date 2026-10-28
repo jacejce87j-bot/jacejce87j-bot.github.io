@@ -63,6 +63,10 @@ type TicketStockUsage = {
 };
 type DeviceTypeOption = { id: number; name: string };
 
+const isChannelTemplateField = (field: any) =>
+  /^channel(?:[1-8])?$/.test(String(field.key ?? '').toLowerCase().replace(/[^a-z0-9]/g, ''))
+  || /^channel\s*[1-8]$/i.test(String(field.label ?? '').trim());
+
 const STATUS_OPTIONS = ['new', 'open', 'pending', 'solved', 'closed'];
 type MobileTicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 type ApiTicketPriority = 'low' | 'normal' | 'high' | 'urgent';
@@ -374,7 +378,13 @@ export default function AgentHomeScreen() {
     setEditTemplateId(template.id);
 
     if (template.fields && template.fields.length) {
-      setEditTemplateFields(template.fields);
+      const templateFields = template.fields.map((field: any) => isChannelTemplateField(field)
+        ? { ...field, key: 'channel', label: 'Channel' }
+        : field
+      ).filter((field: any, index: number, fields: any[]) =>
+        fields.findIndex((candidate: any) => candidate.key === field.key) === index
+      );
+      setEditTemplateFields(templateFields);
       const savedValues = new Map(
         (editingTicket?.templateData ?? []).map((field: any) => [
           String(field.key || '').toLowerCase().replace(/[^a-z0-9]/g, ''),
@@ -386,7 +396,7 @@ export default function AgentHomeScreen() {
         const match = line.match(/^\s*([^:]+):\s*(.*)$/);
         if (match) descriptionValues.set(match[1].toLowerCase().replace(/[^a-z0-9]/g, ''), match[2].trim());
       }
-      setEditTemplateValues(Object.fromEntries(template.fields.map((field: any) => {
+      setEditTemplateValues(Object.fromEntries(templateFields.map((field: any) => {
         const key = String(field.key || field.label || '').replace(/[_-](.)/g, (_match, character) => String(character).toUpperCase());
         const compactKey = String(field.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const compactLabel = String(field.label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1047,8 +1057,8 @@ export default function AgentHomeScreen() {
                 {editTemplateFields.map((field) => (
                   <View key={field.key} style={{ gap: 6 }}>
                     <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>{field.label}{field.required ? ' *' : ''}</Text>
-                    {/^(channel[1-8]|channel|trackingType|deviceType)$/.test(field.key) ? (() => {
-                      const isChannel = /^channel[1-8]$/.test(field.key) || field.key === 'channel';
+                    {/^(channel|trackingType|deviceType)$/.test(field.key) ? (() => {
+                      const isChannel = field.key === 'channel';
                       const options = isChannel
                         ? Array.from({ length: 8 }, (_, index) => ({ id: index + 1, name: `Channel ${index + 1}` }))
                         : field.key === 'trackingType' ? trackingDeviceTypes : cameraDeviceTypes;

@@ -24,6 +24,7 @@ jobs:
         run: pnpm run build
         env:
           VITE_API_URL: https://orion-supportdesk-api.onrender.com
+          VITE_WS_URL: https://orion-supportdesk-api.onrender.com
       - name: Create SPA fallback
         run: |
           cp artifacts/ticket-system/dist/index.html artifacts/ticket-system/dist/404.html

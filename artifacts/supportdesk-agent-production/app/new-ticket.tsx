@@ -51,14 +51,22 @@ const normalizeTemplateFieldKey = (label: string) => {
     hrs: 'hrs',
     'vehicle type': 'vehicleType',
     'installation hours': 'hrs',
-    'channel 1': 'channel1',
-    'channel 2': 'channel2',
-    'channel 3': 'channel3',
-    'channel 4': 'channel4',
-    'channel 5': 'channel5',
-    'channel 6': 'channel6',
-    'channel 7': 'channel7',
-    'channel 8': 'channel8',
+    'channel 1': 'channel',
+    'channel 2': 'channel',
+    'channel 3': 'channel',
+    'channel 4': 'channel',
+    'channel 5': 'channel',
+    'channel 6': 'channel',
+    'channel 7': 'channel',
+    'channel 8': 'channel',
+    channel1: 'channel',
+    channel2: 'channel',
+    channel3: 'channel',
+    channel4: 'channel',
+    channel5: 'channel',
+    channel6: 'channel',
+    channel7: 'channel',
+    channel8: 'channel',
   };
 
   const normalized = cleaned.replace(/\s+/g, ' ');
@@ -68,11 +76,14 @@ const normalizeTemplateFieldKey = (label: string) => {
 const inferTemplateFields = (template: any) => {
   const explicitFields = Array.isArray(template?.fields) ? template.fields : [];
   if (explicitFields.length) {
-    return explicitFields.map((field: any) => ({
+    const fields = explicitFields.map((field: any) => ({
       ...field,
       key: normalizeTemplateFieldKey(field.label || field.name || field.key || ''),
-      label: field.label || field.name || 'Field',
+      label: normalizeTemplateFieldKey(field.label || field.name || field.key || '') === 'channel'
+        ? 'Channel'
+        : field.label || field.name || 'Field',
     }));
+    return fields.filter((field: any, index: number) => fields.findIndex((candidate: any) => candidate.key === field.key) === index);
   }
 
   const lines = String(template?.description ?? '')
@@ -493,8 +504,8 @@ export default function NewTicketScreen() {
             {templateFields.map((f) => (
               <View key={f.key} style={{ marginBottom: 10 }}>
                 <Text style={[styles.label, { color: colors.foreground }]}>{f.label}{f.required ? ' *' : ''}</Text>
-                {/^(channel[1-8]|channel|trackingType|deviceType)$/.test(f.key) ? (() => {
-                  const isChannel = /^channel[1-8]$/.test(f.key) || f.key === 'channel';
+                {/^(channel|trackingType|deviceType)$/.test(f.key) ? (() => {
+                  const isChannel = f.key === 'channel';
                   const options = isChannel
                     ? Array.from({ length: 8 }, (_, index) => ({ id: index + 1, name: `Channel ${index + 1}` }))
                     : f.key === 'trackingType' ? trackingDeviceTypes : cameraDeviceTypes;

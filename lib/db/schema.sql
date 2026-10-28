@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   satisfaction TEXT,
   merged_into_id INTEGER,
   attachments JSONB NOT NULL DEFAULT '[]',
+  template_data JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

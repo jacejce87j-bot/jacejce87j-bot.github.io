@@ -59,22 +59,22 @@ const fieldAliases: Record<string, string> = {
   "hours": "hours",
   "hrs": "hours",
   "channel": "channel",
-  "channel 1": "channel1",
-  "channel 2": "channel2",
-  "channel 3": "channel3",
-  "channel 4": "channel4",
-  "channel 5": "channel5",
-  "channel 6": "channel6",
-  "channel 7": "channel7",
-  "channel 8": "channel8",
-  "channel1": "channel1",
-  "channel2": "channel2",
-  "channel3": "channel3",
-  "channel4": "channel4",
-  "channel5": "channel5",
-  "channel6": "channel6",
-  "channel7": "channel7",
-  "channel8": "channel8",
+  "channel 1": "channel",
+  "channel 2": "channel",
+  "channel 3": "channel",
+  "channel 4": "channel",
+  "channel 5": "channel",
+  "channel 6": "channel",
+  "channel 7": "channel",
+  "channel 8": "channel",
+  "channel1": "channel",
+  "channel2": "channel",
+  "channel3": "channel",
+  "channel4": "channel",
+  "channel5": "channel",
+  "channel6": "channel",
+  "channel7": "channel",
+  "channel8": "channel",
 };
 
 function normalizeTemplateFieldKey(value: string): string {
@@ -136,16 +136,13 @@ function withChannelTemplateFields(fields: unknown, description = ""): TemplateF
     };
     const label = String(candidate.label ?? "");
     const normalizedKey = normalizeTemplateFieldKey(String(candidate.key ?? label));
-    const normalizedLabel = normalizeTemplateFieldKey(label);
-    const key = normalizedKey === "channel" && /^channel[1-8]$/.test(normalizedLabel)
-      ? normalizedLabel
-      : normalizedKey;
-    if (!key || (key === "channel" && label.trim().toLowerCase() === "channel") || seen.has(key)) continue;
+    const key = normalizedKey;
+    if (!key || seen.has(key)) continue;
 
     seen.add(key);
     const normalizedField: TemplateField = {
       key,
-      label: label || key,
+      label: key === "channel" ? "Channel" : label || key,
     };
     if (candidate.required === true) normalizedField.required = true;
     if (candidate.value !== undefined) normalizedField.value = String(candidate.value);

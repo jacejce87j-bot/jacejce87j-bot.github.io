@@ -141,22 +141,22 @@ export default function NewTicket() {
       "hours": "hours",
       "hrs": "hours",
       "channel": "channel",
-      "channel 1": "channel1",
-      "channel 2": "channel2",
-      "channel 3": "channel3",
-      "channel 4": "channel4",
-      "channel 5": "channel5",
-      "channel 6": "channel6",
-      "channel 7": "channel7",
-      "channel 8": "channel8",
-      "channel1": "channel1",
-      "channel2": "channel2",
-      "channel3": "channel3",
-      "channel4": "channel4",
-      "channel5": "channel5",
-      "channel6": "channel6",
-      "channel7": "channel7",
-      "channel8": "channel8",
+      "channel 1": "channel",
+      "channel 2": "channel",
+      "channel 3": "channel",
+      "channel 4": "channel",
+      "channel 5": "channel",
+      "channel 6": "channel",
+      "channel 7": "channel",
+      "channel 8": "channel",
+      "channel1": "channel",
+      "channel2": "channel",
+      "channel3": "channel",
+      "channel4": "channel",
+      "channel5": "channel",
+      "channel6": "channel",
+      "channel7": "channel",
+      "channel8": "channel",
     };
 
     if (aliases[raw]) {
@@ -364,8 +364,12 @@ export default function NewTicket() {
                           const resolvedFields = sourceFields.map((field: any) => ({
                             ...field,
                             key: normalizeTemplateFieldKey(String(field.key || field.label || field.name || "")),
-                            label: String(field.label || field.name || field.key || "Field"),
-                          })).filter((field: any) => field.key);
+                            label: normalizeTemplateFieldKey(String(field.key || field.label || field.name || "")) === "channel"
+                              ? "Channel"
+                              : String(field.label || field.name || field.key || "Field"),
+                          })).filter((field: any, index: number, fields: any[]) =>
+                            field.key && fields.findIndex((candidate: any) => candidate.key === field.key) === index
+                          );
 
                           if (resolvedFields.length) {
                             setTemplateFields(resolvedFields);
@@ -400,46 +404,6 @@ export default function NewTicket() {
 
                   </div>
                 )}
-
-                {templateFields && templateFields.length ? (
-                  <div className="space-y-3">
-                    {templateFields.map((f: any) => (
-                      <div key={f.key} className="grid grid-cols-1 gap-2">
-                        <label className="text-sm font-medium">{f.label}{f.required ? ' *' : ''}</label>
-                        {/^channel[1-8]$/.test(f.key) || f.key === "channel" ? (
-                          <Select value={templateFieldValues[f.key] ?? ""} onValueChange={(value) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: value }))}>
-                            <SelectTrigger><SelectValue placeholder="Select channel" /></SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 8 }, (_, index) => `Channel ${index + 1}`).map((option) => (
-                                <SelectItem key={option} value={option}>{option}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : f.key === "trackingType" || f.key === "deviceType" ? (
-                          <Select
-                            value={templateFieldValues[f.key] ?? "none"}
-                            onValueChange={(value) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: value === "none" ? "" : value }))}
-                          >
-                            <SelectTrigger><SelectValue placeholder={f.label} /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">No device selected</SelectItem>
-                              {(f.key === "trackingType" ? trackingDeviceTypes : cameraDeviceTypes).map((deviceType) => (
-                                <SelectItem key={deviceType.id} value={deviceType.name}>{deviceType.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input
-                            type={f.type === "number" ? "number" : f.type === "phone" ? "tel" : "text"}
-                            value={templateFieldValues[f.key] ?? ''}
-                            onChange={(e) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                          />
-                        )}
-                      </div>
-                    ))}
-                    <p className="text-xs text-muted-foreground">These fields are saved separately on the ticket and included in its description.</p>
-                  </div>
-                ) : null}
 
                 <FormField
                   control={form.control}
@@ -489,6 +453,54 @@ export default function NewTicket() {
                     </FormItem>
                   )}
                 />
+
+                {templateFields && templateFields.length ? (
+                  <section className="space-y-4 rounded-lg border bg-slate-50/80 p-4 dark:bg-slate-950/30">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                      Template installation details
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {templateFields.map((f: any) => (
+                        <div key={f.key} className="space-y-2">
+                          <label className="text-sm font-medium">{f.label}{f.required ? ' *' : ''}</label>
+                          {f.key === "channel" ? (
+                            <Select value={templateFieldValues[f.key] ?? ""} onValueChange={(value) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: value }))}>
+                              <SelectTrigger><SelectValue placeholder="Select channel" /></SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 8 }, (_, index) => `Channel ${index + 1}`).map((option) => (
+                                  <SelectItem key={option} value={option}>{option}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : f.key === "trackingType" || f.key === "deviceType" ? (
+                            <Select
+                              value={templateFieldValues[f.key] ?? "none"}
+                              onValueChange={(value) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: value === "none" ? "" : value }))}
+                            >
+                              <SelectTrigger><SelectValue placeholder={f.key === "trackingType" ? "Select tracking device" : "Select camera device"} /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No device selected</SelectItem>
+                                {(f.key === "trackingType" ? trackingDeviceTypes : cameraDeviceTypes).map((deviceType) => (
+                                  <SelectItem key={deviceType.id} value={deviceType.name}>{deviceType.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              type={f.type === "number" ? "number" : f.type === "phone" ? "tel" : "text"}
+                              value={templateFieldValues[f.key] ?? ''}
+                              onChange={(e) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                              placeholder={f.label}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      These fields are saved separately on the ticket and included in its description.
+                    </p>
+                  </section>
+                ) : null}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField

@@ -53,6 +53,7 @@ router.get("/", async (req, res) => {
     domain: o.domain,
     industry: o.industry,
     plan: o.plan,
+    address: o.address,
     notes: o.notes,
     contactCount: contactMap.get(o.id) ?? 0,
     ticketCount: ticketMap.get(o.id) ?? 0,

@@ -47,6 +47,7 @@ export default function StockPage() {
   const [form, setForm] = useState({ name: "", sku: "", unit: "units", initialQuantity: "0" });
   const [fieldAgentName, setFieldAgentName] = useState("");
   const [transfer, setTransfer] = useState({ fieldAgentId: "", stockItemId: "", quantity: "1" });
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>({});
   const [countedQuantities, setCountedQuantities] = useState<Record<number, string>>({});
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [movements, setMovements] = useState<Record<number, StockMovement[]>>({});
@@ -164,6 +165,43 @@ export default function StockPage() {
     }
   };
 
+  const returnStock = async (agent: FieldAgent, item: FieldAgent["inventory"][number]) => {
+    const key = `${agent.id}:${item.stockItemId}`;
+    const quantity = Number(returnQuantities[key] ?? "1");
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      setError("Enter a positive quantity to return.");
+      return;
+    }
+    if (quantity > item.quantityOnHand) {
+      setError(`Only ${item.quantityOnHand} ${item.unit} of ${item.stockItemName} are held by ${agent.name}.`);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(getApiUrl("/api/stock/returns"), {
+        method: "POST",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fieldAgentId: agent.id,
+          stockItemId: item.stockItemId,
+          quantity,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Unable to return stock to Orion Stock.");
+      setReturnQuantities((current) => ({ ...current, [key]: "1" }));
+      setNotice(`Returned ${quantity} ${item.unit} of ${item.stockItemName} from ${agent.name} to Orion Stock.`);
+      await loadItems();
+    } catch (returnError) {
+      setError(returnError instanceof Error ? returnError.message : "Unable to return stock to Orion Stock.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveCount = async (item: StockItem) => {
     const quantityOnHand = Number(countedQuantities[item.id] ?? item.quantityOnHand);
     if (!Number.isSafeInteger(quantityOnHand) || quantityOnHand < 0 || !adjustmentReason.trim()) {
@@ -267,11 +305,39 @@ export default function StockPage() {
                   {fieldAgents.map((agent) => (
                     <div key={agent.id} className="rounded-md border p-3">
                       <h3 className="font-medium">{agent.name}</h3>
-                      {agent.inventory.length ? (
+                      {agent.inventory.some((balance) => balance.quantityOnHand > 0) ? (
                         <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                          {agent.inventory.map((balance) => (
-                            <li key={balance.stockItemId}>
-                              {balance.stockItemName}: {balance.quantityOnHand} {balance.unit}
+                          {agent.inventory.filter((balance) => balance.quantityOnHand > 0).map((balance) => (
+                            <li key={balance.stockItemId} className="flex flex-wrap items-end justify-between gap-3 rounded-md bg-muted/30 p-3">
+                              <div className="min-w-[150px] flex-1">
+                                <p className="font-medium text-foreground">{balance.stockItemName}</p>
+                                <p>{balance.quantityOnHand} {balance.unit} with {agent.name}</p>
+                              </div>
+                              <div className="flex items-end gap-2">
+                                <div className="space-y-1">
+                                  <Label htmlFor={`return-${agent.id}-${balance.stockItemId}`}>Return quantity</Label>
+                                  <Input
+                                    id={`return-${agent.id}-${balance.stockItemId}`}
+                                    type="number"
+                                    min={1}
+                                    max={balance.quantityOnHand}
+                                    step={1}
+                                    value={returnQuantities[`${agent.id}:${balance.stockItemId}`] ?? "1"}
+                                    onChange={(event) => setReturnQuantities((current) => ({
+                                      ...current,
+                                      [`${agent.id}:${balance.stockItemId}`]: event.target.value,
+                                    }))}
+                                  />
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={saving || !Number.isSafeInteger(Number(returnQuantities[`${agent.id}:${balance.stockItemId}`] ?? "1")) || Number(returnQuantities[`${agent.id}:${balance.stockItemId}`] ?? "1") < 1 || Number(returnQuantities[`${agent.id}:${balance.stockItemId}`] ?? "1") > balance.quantityOnHand}
+                                  onClick={() => void returnStock(agent, balance)}
+                                >
+                                  {saving ? "Returning..." : "Return to Orion Stock"}
+                                </Button>
+                              </div>
                             </li>
                           ))}
                         </ul>

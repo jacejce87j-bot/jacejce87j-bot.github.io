@@ -1,38 +1,10 @@
 import { configureNativeApiTransport } from '@workspace/api-client-react';
 import { PropsWithChildren, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 import { tokenStorage } from '@/lib/storage';
-
-const configuredProductionDomain =
-  process.env.EXPO_PUBLIC_PRODUCTION_API_DOMAIN?.trim();
-
-const TAILSCALE_FALLBACK_URL = 'http://100.116.75.63:5000';
+import { BACKUP_API, PRIMARY_API } from '@/lib/api';
 
 export function getProductionApiBaseUrl(): string {
-  const isDev =
-    typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
-
-  if (configuredProductionDomain) {
-    const value = /^https?:\/\//i.test(configuredProductionDomain)
-      ? configuredProductionDomain
-      : (isDev ? `http://${configuredProductionDomain}` : `https://${configuredProductionDomain}`);
-    try {
-      const url = new URL(value);
-      return url.origin;
-    } catch (_e) {
-      // Ignore invalid env values and fall back to the standard local/mesh config.
-    }
-  }
-
-  if (isDev) {
-    return Platform.select({
-      android: 'http://10.0.2.2:5000',
-      ios: 'http://localhost:5000',
-      default: 'http://localhost:5000',
-    });
-  }
-
-  return TAILSCALE_FALLBACK_URL;
+  return PRIMARY_API.replace(/\/+$/, '');
 }
 
 export function ProductionApiProvider({ children }: PropsWithChildren) {
@@ -45,12 +17,12 @@ export function ProductionApiProvider({ children }: PropsWithChildren) {
         try {
           const storedToken = await tokenStorage.getItem('userToken');
           if (storedToken) {
-            configureNativeApiTransport(baseUrl, storedToken);
+            configureNativeApiTransport(baseUrl, storedToken, BACKUP_API);
           } else {
-            configureNativeApiTransport(baseUrl);
+            configureNativeApiTransport(baseUrl, undefined, BACKUP_API);
           }
         } catch (_e) {
-          configureNativeApiTransport(baseUrl);
+          configureNativeApiTransport(baseUrl, undefined, BACKUP_API);
         }
       }
       setIsConfigured(true);

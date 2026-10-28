@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
 import { useRoute, Link } from "wouter";
 import { AppLayout } from "@/components/layout";
 import { 
   useGetOrganization, 
   getGetOrganizationQueryKey,
+  getListOrganizationsQueryKey,
+  useUpdateOrganization,
   useListContacts,
   getListContactsQueryKey,
   useListTickets,
@@ -16,16 +19,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRelativeTime, getInitials } from "@/lib/utils";
 import { ArrowLeft, Globe, Briefcase, CreditCard, Users, Ticket as TicketIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 export default function OrganizationDetail() {
   const [, params] = useRoute("/organizations/:id");
   const orgId = params?.id ? parseInt(params.id) : 0;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [serviceAddress, setServiceAddress] = useState("");
   
   const { data: org, isLoading: isLoadingOrg } = useGetOrganization(orgId, {
     query: {
       enabled: !!orgId,
       queryKey: getGetOrganizationQueryKey(orgId)
     }
+  });
+
+  useEffect(() => {
+    setServiceAddress(org?.address ?? "");
+  }, [org?.address]);
+
+  const updateOrganization = useUpdateOrganization({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetOrganizationQueryKey(orgId) });
+        queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+        toast({ title: "Service address updated" });
+      },
+      onError: () => toast({ title: "Could not update service address", variant: "destructive" }),
+    },
   });
 
   const { data: contacts, isLoading: isLoadingContacts } = useListContacts(
@@ -95,6 +119,22 @@ export default function OrganizationDetail() {
                 <CardTitle className="text-lg">Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Globe className="h-3 w-3" /> Service address (shown on job cards)</div>
+                  <Input
+                    value={serviceAddress}
+                    onChange={(event) => setServiceAddress(event.target.value)}
+                    placeholder="Enter the organization's service address"
+                    aria-label="Organization service address"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={updateOrganization.isPending || serviceAddress.trim() === (org.address ?? "")}
+                    onClick={() => updateOrganization.mutate({ id: orgId, data: { address: serviceAddress.trim() || null } })}
+                  >
+                    {updateOrganization.isPending ? "Saving..." : "Save address"}
+                  </Button>
+                </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Briefcase className="h-3 w-3" /> Industry</div>
                   <div className="text-sm font-medium">{org.industry || "—"}</div>

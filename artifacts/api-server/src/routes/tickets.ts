@@ -143,6 +143,7 @@ function serializeOrg(o: OrgRow | null | undefined) {
     domain: o.domain,
     industry: o.industry,
     plan: o.plan,
+    address: o.address,
     notes: o.notes,
     contactCount: 0,
     ticketCount: 0,
@@ -177,6 +178,7 @@ export function serializeTicket(
     organization: serializeOrg(org),
     tags: row.tags,
     dueAt: row.dueAt?.toISOString() ?? null,
+    scheduledAt: row.scheduledAt?.toISOString() ?? null,
     firstResponseAt: row.firstResponseAt?.toISOString() ?? null,
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
     satisfaction: row.satisfaction,
@@ -475,8 +477,9 @@ router.post("/", async (req, res) => {
     const manualAssignmentApplied = body.assigneeId !== undefined && body.assigneeId !== null;
     const primaryAgentOnline = Boolean(configuredOnCallAgent && configuredOnCallAgent.isOnline);
     const backupAgentOnline = Boolean(configuredBackupAgent && configuredBackupAgent.isOnline);
+    const hasRoutingConfiguration = configuredOnCallAgentId !== null || configuredBackupAgentId !== null;
     const fallbackExclusions = [configuredOnCallAgentId, configuredBackupAgentId].filter((id): id is number => Number.isFinite(id));
-    const leastLoadedOnlineAgent = !manualAssignmentApplied && !primaryAgentOnline && !backupAgentOnline
+    const leastLoadedOnlineAgent = hasRoutingConfiguration && !manualAssignmentApplied && !primaryAgentOnline && !backupAgentOnline
       ? await findLeastLoadedOnlineAgent(fallbackExclusions)
       : null;
 
@@ -498,6 +501,7 @@ router.post("/", async (req, res) => {
       description: ruleEvaluation.description,
       tags: ruleEvaluation.tags,
       dueAt,
+      scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
       requesterId: resolvedRequesterId,
       assigneeId: ruleAssigneeId,
     } as any;
@@ -519,12 +523,14 @@ router.post("/", async (req, res) => {
       ? `Ticket "${ticket.subject}" was created and assigned to agent "${ticket.assigneeId ? (await db.select({ name: agentsTable.name }).from(agentsTable).where(eq(agentsTable.id, ticket.assigneeId))).find(Boolean)?.name ?? "selected agent" : "selected agent"}"`
       : ruleEvaluation.appliedRules.length
         ? `Ticket "${ticket.subject}" was created with rules applied: ${ruleEvaluation.appliedRules.map((rule) => rule.name).join(", ")}`
-      : ticket.assigneeId === configuredOnCallAgentId
+      : configuredOnCallAgentId !== null && ticket.assigneeId === configuredOnCallAgentId
         ? `Ticket "${ticket.subject}" was created and assigned to on-call agent "${configuredOnCallAgent?.name ?? "configured agent"}"`
-        : ticket.assigneeId === configuredBackupAgentId
+        : configuredBackupAgentId !== null && ticket.assigneeId === configuredBackupAgentId
         ? `Ticket "${ticket.subject}" was created and assigned to backup agent "${configuredBackupAgent?.name ?? "backup agent"}" because configured on-call agent "${configuredOnCallAgent?.name ?? "configured on-call agent"}" is offline`
         : leastLoadedOnlineAgent
           ? `Ticket "${ticket.subject}" was created and assigned to least-loaded online agent "${leastLoadedOnlineAgent.name}" because configured on-call agent "${configuredOnCallAgent?.name ?? "configured on-call agent"}" is offline and backup agent "${configuredBackupAgent?.name ?? "backup agent"}" is unavailable`
+          : !hasRoutingConfiguration && !ticket.assigneeId
+            ? `Ticket "${ticket.subject}" was created and left unassigned because no on-call or backup agent is configured`
           : `Ticket "${ticket.subject}" was created and left unassigned because No online agents were available`;
 
     await db.insert(activityEventsTable).values({
@@ -593,7 +599,11 @@ router.patch("/:id", async (req, res) => {
   const updates: Record<string, any> = { ...body };
   if (body.dueAt !== undefined) {
     updates.dueAt = body.dueAt ? new Date(body.dueAt) : null;
-  } else if (body.priority !== undefined && body.priority !== existing.priority) {
+  }
+  if (body.scheduledAt !== undefined) {
+    updates.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+  }
+  if (body.priority !== undefined && body.priority !== existing.priority) {
     const policyDueAt = await resolvePolicyDueAt(body.priority, null);
     if (policyDueAt) updates.dueAt = policyDueAt;
   }

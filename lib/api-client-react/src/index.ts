@@ -3,4 +3,5 @@ export * from "./generated/api.schemas";
 export {
   clearNativeApiTransport,
   configureNativeApiTransport,
+  fetchWithFallback,
 } from "./custom-fetch";

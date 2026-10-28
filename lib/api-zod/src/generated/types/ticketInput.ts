@@ -28,5 +28,7 @@ export interface TicketInput {
   tags?: string[];
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  scheduledAt?: string | null;
   attachments?: TicketAttachment[];
 }

@@ -899,6 +899,8 @@ components:
             type: string
         dueAt:
           type: ["string", "null"]
+        scheduledAt:
+          type: ["string", "null"]
         firstResponseAt:
           type: ["string", "null"]
         resolvedAt:
@@ -994,6 +996,8 @@ components:
             type: string
         dueAt:
           type: ["string", "null"]
+        scheduledAt:
+          type: ["string", "null"]
         attachments:
           type: array
           items:
@@ -1064,6 +1068,8 @@ components:
           items:
             type: string
         dueAt:
+          type: ["string", "null"]
+        scheduledAt:
           type: ["string", "null"]
         satisfaction:
           type: ["string", "null"]
@@ -1362,6 +1368,8 @@ components:
           type: ["string", "null"]
         plan:
           type: ["string", "null"]
+        address:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         contactCount:
@@ -1386,6 +1394,8 @@ components:
           type: string
         plan:
           type: string
+        address:
+          type: string
         notes:
           type: string
 
@@ -1399,6 +1409,8 @@ components:
         industry:
           type: ["string", "null"]
         plan:
+          type: ["string", "null"]
+        address:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]

@@ -23,6 +23,10 @@ function NativeTabLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'plus.circle', selected: 'plus.circle.fill' }} />
         <NativeTabs.Trigger.Label>Create ticket</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="stock">
+        <NativeTabs.Trigger.Icon sf={{ default: 'shippingbox', selected: 'shippingbox.fill' }} />
+        <NativeTabs.Trigger.Label>Stock</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -89,6 +93,13 @@ function ClassicTabLayout() {
           title: 'Create ticket',
           headerShown: false,
           tabBarIcon: ({ color }) => <Feather name="plus-circle" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stock"
+        options={{
+          title: 'Stock',
+          tabBarIcon: ({ color }) => <Feather name="archive" size={22} color={color} />,
         }}
       />
     </Tabs>

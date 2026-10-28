@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
 import { tokenStorage } from '@/lib/storage';
 import { configureNativeApiTransport } from '@workspace/api-client-react';
+import { BACKUP_API, fetchWithFallback } from '@/lib/api';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -37,7 +38,12 @@ export function GoogleAuthButton({ onError }: Props) {
         path: 'auth/callback',
       });
 
-      const authUrl = `${baseUrl}/api/auth/google?redirect_uri=${encodeURIComponent(redirectUri)}`;
+      const healthResponse = await fetchWithFallback('/api/healthz');
+      if (!healthResponse.ok) {
+        throw new Error(`API health check failed with HTTP ${healthResponse.status}.`);
+      }
+      const reachableBaseUrl = healthResponse.url ? new URL(healthResponse.url).origin : baseUrl;
+      const authUrl = `${reachableBaseUrl}/api/auth/google?redirect_uri=${encodeURIComponent(redirectUri)}`;
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
 
       if (result.type === 'success' && result.url) {
@@ -52,7 +58,7 @@ export function GoogleAuthButton({ onError }: Props) {
         if (token) {
           await tokenStorage.setItem('userToken', token);
           try {
-            configureNativeApiTransport(baseUrl, token);
+            configureNativeApiTransport(baseUrl, token, BACKUP_API);
           } catch (e) {
             try {
               if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {

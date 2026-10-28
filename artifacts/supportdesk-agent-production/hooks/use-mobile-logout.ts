@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
+import { fetchWithFallback } from "@/lib/api";
 
 // ✅ Import universal storage helper
 import { tokenStorage } from "@/lib/storage";
@@ -24,7 +25,7 @@ export function useMobileLogout() {
   const handleLogout = async () => {
     try {
       // 1. Fire-and-forget call to backend to invalidate cookie/session
-      fetch("/api/auth/logout", {
+      fetchWithFallback("/api/auth/logout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       }).catch(() => {

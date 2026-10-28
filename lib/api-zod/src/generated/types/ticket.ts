@@ -37,6 +37,8 @@ export interface Ticket {
   /** @nullable */
   dueAt?: string | null;
   /** @nullable */
+  scheduledAt?: string | null;
+  /** @nullable */
   firstResponseAt?: string | null;
   /** @nullable */
   resolvedAt?: string | null;

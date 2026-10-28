@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -24,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useListAgents, useListTicketTemplates } from '@workspace/api-client-react';
-import { formatAttachmentSize, pickTicketFile, uploadTicketFile } from '@/components/ticketAttachments';
+import { formatAttachmentSize, pickTicketFiles, uploadTicketFile } from '@/components/ticketAttachments';
 import type { TicketAttachment } from '@workspace/api-client-react';
 
 const PRIORITIES: TicketInput['priority'][] = ['low', 'normal', 'high', 'urgent'];
@@ -104,8 +105,14 @@ export default function NewTicketScreen() {
   const [channel, setChannel] = useState<TicketInput['channel']>('web');
   const [requesterId, setRequesterId] = useState<number | null>(null);
   const [organizationId, setOrganizationId] = useState<number | null>(null);
+  const [selectedRequesterLabel, setSelectedRequesterLabel] = useState('');
+  const [selectedOrganizationLabel, setSelectedOrganizationLabel] = useState('');
+  const [selectedOrganizationAddress, setSelectedOrganizationAddress] = useState('');
+  const [scheduledAtInput, setScheduledAtInput] = useState('');
   const [requesterSearch, setRequesterSearch] = useState('');
   const [organizationSearch, setOrganizationSearch] = useState('');
+  const [isRequesterDropdownOpen, setIsRequesterDropdownOpen] = useState(false);
+  const [isOrganizationDropdownOpen, setIsOrganizationDropdownOpen] = useState(false);
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
   const [error, setError] = useState('');
@@ -165,18 +172,29 @@ export default function NewTicketScreen() {
 
   const handlePickAttachment = async () => {
     setUploadError('');
-    const file = await pickTicketFile();
-    if (!file) return;
+    const files = await pickTicketFiles();
+    if (!files.length) return;
 
     setIsUploading(true);
-    try {
-      const attachment = await uploadTicketFile(file);
-      setAttachments((current) => [...current, attachment]);
-    } catch (requestError) {
-      setUploadError(requestError instanceof Error ? requestError.message : 'Attachment upload failed.');
-    } finally {
-      setIsUploading(false);
+    const uploaded: TicketAttachment[] = [];
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        uploaded.push(await uploadTicketFile(file));
+      } catch (requestError) {
+        const reason = requestError instanceof Error ? requestError.message : 'Upload failed.';
+        failures.push(`${file.name}: ${reason}`);
+      }
     }
+    if (uploaded.length) setAttachments((current) => [...current, ...uploaded]);
+    if (failures.length) {
+      setUploadError(
+        uploaded.length
+          ? `Uploaded ${uploaded.length} of ${files.length} files. Failed: ${failures.join(' ')}`
+          : failures.join(' '),
+      );
+    }
+    setIsUploading(false);
   };
 
   const activeTemplates = (templatesQuery.data ?? []).filter((template) => template.isActive);
@@ -213,81 +231,163 @@ export default function NewTicketScreen() {
         />
 
         <Text style={[styles.label, { color: colors.foreground }]}>Requester *</Text>
-        <TextInput
-          value={requesterSearch}
-          onChangeText={(value) => {
-            setRequesterSearch(value);
-            setRequesterId(null);
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={requesterId === null ? 'Select requester' : `Requester: ${selectedRequesterLabel}`}
+          accessibilityState={{ expanded: isRequesterDropdownOpen }}
+          onPress={() => {
+            const willOpen = !isRequesterDropdownOpen;
+            setIsRequesterDropdownOpen(willOpen);
+            setIsOrganizationDropdownOpen(false);
+            if (willOpen) setRequesterSearch('');
           }}
-          placeholder="Search requesters by name or email"
-          placeholderTextColor={colors.mutedForeground}
-          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
-          autoCapitalize="none"
-          accessibilityLabel="Search requesters"
-        />
-        {requesterId === null ? (
-          <View style={styles.choices}>
-            {(contactsQuery.data?.data ?? []).map((contact) => (
-              <Pressable
-                key={contact.id}
-                onPress={() => {
-                  setRequesterId(contact.id);
-                  setRequesterSearch(`${contact.name} (${contact.email})`);
-                }}
-                style={[styles.choice, { backgroundColor: colors.card, borderColor: colors.border }]}
-              >
-                <Text style={[styles.choiceText, { color: colors.mutedForeground }]}>{contact.name} ({contact.email})</Text>
+          style={[styles.selectTrigger, { backgroundColor: colors.card, borderColor: colors.input }]}
+        >
+          <Text
+            numberOfLines={1}
+            style={[styles.selectTriggerText, { color: requesterId === null ? colors.mutedForeground : colors.foreground }]}
+          >
+            {requesterId === null ? 'Select requester' : selectedRequesterLabel}
+          </Text>
+          <Feather name={isRequesterDropdownOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+        </Pressable>
+        {isRequesterDropdownOpen ? (
+          <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TextInput
+              value={requesterSearch}
+              onChangeText={(value) => {
+                setRequesterSearch(value);
+                setRequesterId(null);
+              }}
+              placeholder="Search requesters by name or email"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.dropdownSearch, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
+              autoCapitalize="none"
+              accessibilityLabel="Search requesters"
+            />
+            {contactsQuery.isLoading ? (
+              <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>Searching requesters…</Text>
+            ) : contactsQuery.isError ? (
+              <Pressable onPress={() => void contactsQuery.refetch()} style={styles.retryLink}>
+                <Text style={[styles.retryLinkText, { color: colors.primary }]}>Requesters could not be loaded. Tap to retry.</Text>
               </Pressable>
-            ))}
+            ) : (contactsQuery.data?.data ?? []).length ? (
+              <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {(contactsQuery.data?.data ?? []).map((contact) => (
+                  <Pressable
+                    key={contact.id}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setRequesterId(contact.id);
+                      setSelectedRequesterLabel(`${contact.name} (${contact.email})`);
+                      setRequesterSearch('');
+                      setIsRequesterDropdownOpen(false);
+                    }}
+                    style={({ pressed }) => [
+                      styles.dropdownOption,
+                      { borderColor: colors.border },
+                      pressed && { backgroundColor: colors.accent },
+                    ]}
+                  >
+                    <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>
+                      {contact.name} ({contact.email})
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : (
+              <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>No requesters found.</Text>
+            )}
           </View>
-        ) : null}
-        {contactsQuery.isLoading ? <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Searching requesters…</Text> : null}
-        {!contactsQuery.isLoading && !contactsQuery.isError && contactsQuery.data?.data.length === 0 ? (
-          <Text style={[styles.helperText, { color: colors.mutedForeground }]}>No requesters found.</Text>
-        ) : null}
-        {contactsQuery.isError ? (
-          <Pressable onPress={() => void contactsQuery.refetch()} style={styles.retryLink}>
-            <Text style={[styles.retryLinkText, { color: colors.primary }]}>Requesters could not be loaded. Tap to retry.</Text>
-          </Pressable>
         ) : null}
 
         <Text style={[styles.label, { color: colors.foreground }]}>Organization *</Text>
-        <TextInput
-          value={organizationSearch}
-          onChangeText={(value) => {
-            setOrganizationSearch(value);
-            setOrganizationId(null);
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={organizationId === null ? 'Select organization' : `Organization: ${selectedOrganizationLabel}`}
+          accessibilityState={{ expanded: isOrganizationDropdownOpen }}
+          onPress={() => {
+            const willOpen = !isOrganizationDropdownOpen;
+            setIsOrganizationDropdownOpen(willOpen);
+            setIsRequesterDropdownOpen(false);
+            if (willOpen) setOrganizationSearch('');
           }}
-          placeholder="Search organizations"
-          placeholderTextColor={colors.mutedForeground}
-          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
-          accessibilityLabel="Search organizations"
-        />
-        {organizationId === null ? (
-          <View style={styles.choices}>
-            {(organizationsQuery.data?.data ?? []).map((organization) => (
-              <Pressable
-                key={organization.id}
-                onPress={() => {
-                  setOrganizationId(organization.id);
-                  setOrganizationSearch(organization.name);
-                }}
-                style={[styles.choice, { backgroundColor: colors.card, borderColor: colors.border }]}
-              >
-                <Text style={[styles.choiceText, { color: colors.mutedForeground }]}>{organization.name}</Text>
+          style={[styles.selectTrigger, { backgroundColor: colors.card, borderColor: colors.input }]}
+        >
+          <Text
+            numberOfLines={1}
+            style={[styles.selectTriggerText, { color: organizationId === null ? colors.mutedForeground : colors.foreground }]}
+          >
+            {organizationId === null ? 'Select organization' : selectedOrganizationLabel}
+          </Text>
+          <Feather name={isOrganizationDropdownOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+        </Pressable>
+        {isOrganizationDropdownOpen ? (
+          <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TextInput
+              value={organizationSearch}
+              onChangeText={(value) => {
+                setOrganizationSearch(value);
+                setOrganizationId(null);
+                setSelectedOrganizationAddress('');
+              }}
+              placeholder="Search organizations"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.dropdownSearch, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
+              accessibilityLabel="Search organizations"
+            />
+            {organizationsQuery.isLoading ? (
+              <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>Searching organizations…</Text>
+            ) : organizationsQuery.isError ? (
+              <Pressable onPress={() => void organizationsQuery.refetch()} style={styles.retryLink}>
+                <Text style={[styles.retryLinkText, { color: colors.primary }]}>Organizations could not be loaded. Tap to retry.</Text>
               </Pressable>
-            ))}
+            ) : (organizationsQuery.data?.data ?? []).length ? (
+              <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {(organizationsQuery.data?.data ?? []).map((organization) => (
+                  <Pressable
+                    key={organization.id}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setOrganizationId(organization.id);
+                      setSelectedOrganizationLabel(organization.name);
+                      setSelectedOrganizationAddress(organization.address ?? '');
+                      setOrganizationSearch('');
+                      setIsOrganizationDropdownOpen(false);
+                    }}
+                    style={({ pressed }) => [
+                      styles.dropdownOption,
+                      { borderColor: colors.border },
+                      pressed && { backgroundColor: colors.accent },
+                    ]}
+                  >
+                    <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{organization.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : (
+              <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>No organizations found.</Text>
+            )}
           </View>
         ) : null}
-        {organizationsQuery.isLoading ? <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Searching organizations…</Text> : null}
-        {!organizationsQuery.isLoading && !organizationsQuery.isError && organizationsQuery.data?.data.length === 0 ? (
-          <Text style={[styles.helperText, { color: colors.mutedForeground }]}>No organizations found.</Text>
+
+        {selectedOrganizationAddress ? (
+          <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>Job address</Text>
+            <Text style={[styles.helperText, { color: colors.mutedForeground }]}>{selectedOrganizationAddress}</Text>
+          </View>
         ) : null}
-        {organizationsQuery.isError ? (
-          <Pressable onPress={() => void organizationsQuery.refetch()} style={styles.retryLink}>
-            <Text style={[styles.retryLinkText, { color: colors.primary }]}>Organizations could not be loaded. Tap to retry.</Text>
-          </Pressable>
-        ) : null}
+
+        <Text style={[styles.label, { color: colors.foreground }]}>Booking date and time</Text>
+        <TextInput
+          value={scheduledAtInput}
+          onChangeText={setScheduledAtInput}
+          placeholder="YYYY-MM-DDTHH:mm"
+          placeholderTextColor={colors.mutedForeground}
+          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+          accessibilityLabel="Booking date and time"
+        />
+        <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Optional. Enter the local appointment date and time.</Text>
 
         <Text style={[styles.label, { color: colors.foreground }]}>Description template</Text>
         {activeTemplates.length ? (
@@ -429,12 +529,12 @@ export default function NewTicketScreen() {
           <Text style={[styles.label, styles.attachmentLabel, { color: colors.foreground }]}>Attachments</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Attach a file"
+            accessibilityLabel="Attach files"
             disabled={isUploading}
             onPress={() => void handlePickAttachment()}
             style={({ pressed }) => [styles.attachButton, { borderColor: colors.border }, isUploading && styles.disabled, pressed && styles.pressed]}
           >
-            <Text style={[styles.attachButtonText, { color: colors.primary }]}>{isUploading ? 'Uploading…' : '+ Attach file'}</Text>
+            <Text style={[styles.attachButtonText, { color: colors.primary }]}>{isUploading ? 'Uploading…' : '+ Attach files'}</Text>
           </Pressable>
         </View>
         {attachments.length ? (
@@ -466,6 +566,11 @@ export default function NewTicketScreen() {
               setError('Select both a requester and an organization before creating the ticket.');
               return;
             }
+            const scheduledDate = scheduledAtInput ? new Date(scheduledAtInput) : null;
+            if (scheduledDate && Number.isNaN(scheduledDate.getTime())) {
+              setError('Enter the booking date and time in YYYY-MM-DDTHH:mm format.');
+              return;
+            }
             let finalDescription = description.trim();
             if (templateFields && templateFields.length) {
               const missing = templateFields.filter((f) => f.required && !(templateFieldValues[f.key]?.trim()));
@@ -489,6 +594,7 @@ export default function NewTicketScreen() {
                 organizationId,
                 assigneeId,
                 attachments,
+                scheduledAt: scheduledDate?.toISOString() ?? null,
               },
             });
           }}
@@ -551,6 +657,14 @@ const styles = StyleSheet.create({
   retryLink: { alignSelf: 'flex-start', paddingVertical: 4, marginTop: 2 },
   retryLinkText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   input: { minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  selectTrigger: { minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  selectTriggerText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  dropdown: { borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 6 },
+  dropdownSearch: { minHeight: 44, borderWidth: 1, borderRadius: 6, paddingHorizontal: 11, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  dropdownOptions: { maxHeight: 240, marginTop: 6 },
+  dropdownOption: { minHeight: 46, borderBottomWidth: StyleSheet.hairlineWidth, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8 },
+  dropdownOptionText: { fontFamily: 'Inter_400Regular', fontSize: 14 },
+  dropdownMessage: { padding: 12, fontFamily: 'Inter_400Regular', fontSize: 13 },
   multilineInput: { minHeight: 120, paddingTop: 14 },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   choice: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },

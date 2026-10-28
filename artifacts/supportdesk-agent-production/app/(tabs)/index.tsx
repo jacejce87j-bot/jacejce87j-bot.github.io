@@ -31,6 +31,7 @@ import {
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatAttachmentSize, loadTicketAttachmentPreview, openTicketAttachment, pickTicketFiles, uploadTicketFile } from '@/components/ticketAttachments';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
 import { fetchWithFallback } from '@/lib/api';
 
@@ -45,10 +46,40 @@ const getToken = async () => {
 // Current authenticated user fetched from API
 type CurrentUser = { id: string; email: string; firstName?: string | null } | null;
 type StockItem = { id: number; name: string; sku: string | null; unit: string; quantityOnHand: number };
-type TicketStockUsage = { id: number; stockItemId: number; stockItemName: string; unit: string; quantity: number; deductedAt: string | null };
+type FieldAgent = {
+  id: number;
+  name: string;
+  inventory: { stockItemId: number; quantityOnHand: number }[];
+};
+type TicketStockUsage = {
+  id: number;
+  stockItemId: number;
+  stockItemName: string;
+  unit: string;
+  fieldAgentId: number | null;
+  fieldAgentName: string | null;
+  quantity: number;
+  deductedAt: string | null;
+};
 
 const STATUS_OPTIONS = ['new', 'open', 'pending', 'solved', 'closed'];
-const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
+type MobileTicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+type ApiTicketPriority = 'low' | 'normal' | 'high' | 'urgent';
+const PRIORITY_OPTIONS: MobileTicketPriority[] = ['low', 'medium', 'high', 'urgent'];
+
+const toMobilePriority = (priority?: ApiTicketPriority | null): MobileTicketPriority =>
+  priority === 'normal' ? 'medium' : priority ?? 'medium';
+
+const toApiPriority = (priority: MobileTicketPriority): ApiTicketPriority =>
+  priority === 'medium' ? 'normal' : priority;
+
+const toLocalDateTimeInput = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 
 export default function AgentHomeScreen() {
   const colors = useColors();
@@ -111,16 +142,20 @@ export default function AgentHomeScreen() {
   const [editSubject, setEditSubject] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editStatus, setEditStatus] = useState('');
-  const [editPriority, setEditPriority] = useState('');
+  const [editPriority, setEditPriority] = useState<MobileTicketPriority>('medium');
+  const [editScheduledAt, setEditScheduledAt] = useState('');
   const [editAssigneeId, setEditAssigneeId] = useState<number | null>(null);
   const [editTemplateId, setEditTemplateId] = useState<number | null>(null);
   const [editTemplateFields, setEditTemplateFields] = useState<any[] | null>(null);
   const [editTemplateValues, setEditTemplateValues] = useState<Record<string, string>>({});
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
   const [ticketStockUsage, setTicketStockUsage] = useState<TicketStockUsage[]>([]);
+  const [selectedFieldAgentId, setSelectedFieldAgentId] = useState<number | null>(null);
   const [selectedStockId, setSelectedStockId] = useState<number | null>(null);
   const [stockQuantity, setStockQuantity] = useState('1');
   const [isSavingStockUsage, setIsSavingStockUsage] = useState(false);
+  const selectedFieldAgent = fieldAgents.find((agent) => agent.id === selectedFieldAgentId) ?? null;
 
   const loadStockItems = useCallback(async () => {
     const token = await getToken();
@@ -130,6 +165,16 @@ export default function AgentHomeScreen() {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Unable to load stock (HTTP ${response.status}).`);
     setStockItems(payload.data ?? []);
+  }, []);
+
+  const loadFieldAgents = useCallback(async () => {
+    const token = await getToken();
+    const response = await fetchWithFallback('/api/stock/field-agents', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to load Field Agents (HTTP ${response.status}).`);
+    setFieldAgents(payload.data ?? []);
   }, []);
 
   const loadTicketStockUsage = useCallback(async (ticketId: number) => {
@@ -144,10 +189,10 @@ export default function AgentHomeScreen() {
 
   useEffect(() => {
     if (!currentUser) return;
-    void loadStockItems().catch((error) => {
-      Alert.alert('Stock unavailable', error instanceof Error ? error.message : 'Unable to load stock items.');
+    void Promise.all([loadStockItems(), loadFieldAgents()]).catch((error) => {
+      Alert.alert('Stock unavailable', error instanceof Error ? error.message : 'Unable to load stock and Field Agents.');
     });
-  }, [currentUser?.id, loadStockItems]);
+  }, [currentUser?.id, loadFieldAgents, loadStockItems]);
 
   const templatesQuery = useListTicketTemplates({
     query: {
@@ -230,12 +275,14 @@ export default function AgentHomeScreen() {
     setEditSubject(ticket.subject || '');
     setEditDescription(ticket.description || '');
     setEditStatus(ticket.status || 'open');
-    setEditPriority(ticket.priority || 'medium');
+    setEditPriority(toMobilePriority(ticket.priority));
+    setEditScheduledAt(toLocalDateTimeInput(ticket.scheduledAt));
     setEditAssigneeId(ticket.assigneeId ?? null);
     setEditTemplateId(null);
     setEditTemplateFields(null);
     setEditTemplateValues({});
     setTicketStockUsage([]);
+    setSelectedFieldAgentId(null);
     setSelectedStockId(null);
     setStockQuantity('1');
     void loadTicketStockUsage(ticket.id).catch((error) => {
@@ -245,7 +292,7 @@ export default function AgentHomeScreen() {
 
   const handleAddStockUsage = async () => {
     const quantity = Number(stockQuantity);
-    if (!editingTicket || !selectedStockId || !Number.isSafeInteger(quantity) || quantity < 1) return;
+    if (!editingTicket || !selectedFieldAgentId || !selectedStockId || !Number.isSafeInteger(quantity) || quantity < 1) return;
 
     setIsSavingStockUsage(true);
     try {
@@ -257,15 +304,18 @@ export default function AgentHomeScreen() {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ items: [{ stockItemId: selectedStockId, quantity }] }),
+        body: JSON.stringify({
+          fieldAgentId: selectedFieldAgentId,
+          items: [{ stockItemId: selectedStockId, quantity }],
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `Unable to record stock use (HTTP ${response.status}).`);
-      await loadStockItems();
+      await Promise.all([loadStockItems(), loadFieldAgents()]);
       await loadTicketStockUsage(editingTicket.id);
       setSelectedStockId(null);
       setStockQuantity('1');
-      Alert.alert('Stock recorded', 'The stock balance was reduced immediately.');
+      Alert.alert('Stock recorded', "The Field Agent's balance was reduced immediately.");
     } catch (error) {
       Alert.alert('Could not record stock', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -285,7 +335,7 @@ export default function AgentHomeScreen() {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || `Unable to remove stock use (HTTP ${response.status}).`);
       }
-      await loadStockItems();
+      await Promise.all([loadStockItems(), loadFieldAgents()]);
       await loadTicketStockUsage(editingTicket.id);
     } catch (error) {
       Alert.alert('Could not remove stock', error instanceof Error ? error.message : 'Please try again.');
@@ -332,7 +382,8 @@ export default function AgentHomeScreen() {
           subject: editSubject,
           description: finalDescription || undefined,
           status: editStatus as any,
-          priority: editPriority as any,
+          priority: toApiPriority(editPriority),
+          scheduledAt: editScheduledAt ? new Date(editScheduledAt).toISOString() : null,
           assigneeId: editAssigneeId,
           ...Object.fromEntries((editTemplateFields ?? []).map((field: any) => {
             const key = String(field.key || '').replace(/[_-](.)/g, (_match, character) => String(character).toUpperCase());
@@ -530,6 +581,20 @@ export default function AgentHomeScreen() {
                 <Text style={[styles.ticketMeta, { color: colors.mutedForeground }]}>
                   {ticket.priority} priority · {ticket.type}
                 </Text>
+                {ticket.organization?.address ? (
+                  <View style={styles.ticketDetailRow}>
+                    <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>Job address</Text>
+                    <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>{ticket.organization.address}</Text>
+                  </View>
+                ) : null}
+                {ticket.scheduledAt ? (
+                  <View style={styles.ticketDetailRow}>
+                    <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>Booked for</Text>
+                    <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>
+                      {new Date(ticket.scheduledAt).toLocaleString()}
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={styles.ticketDetailRow}>
                   <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>Assigned to</Text>
                   <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>{ticket.assignee?.name ?? 'Unassigned'}</Text>
@@ -686,7 +751,27 @@ export default function AgentHomeScreen() {
             </Pressable>
           </View>
 
-          <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
+          <KeyboardAwareScrollViewCompat
+            style={styles.modalBody}
+            contentContainerStyle={styles.modalContent}
+            bottomOffset={30}
+            keyboardDismissMode="interactive"
+          >
+            {editingTicket?.organization?.address ? (
+              <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.mutedForeground, marginTop: 0 }]}>Job address</Text>
+                <Text style={[styles.cardText, { color: colors.foreground }]}>{editingTicket.organization.address}</Text>
+              </View>
+            ) : null}
+            <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Booking date and time</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+              value={editScheduledAt}
+              onChangeText={setEditScheduledAt}
+              placeholder="YYYY-MM-DDTHH:mm"
+              placeholderTextColor={colors.mutedForeground}
+              accessibilityLabel="Booking date and time"
+            />
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Subject</Text>
             <TextInput
               style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
@@ -716,7 +801,7 @@ export default function AgentHomeScreen() {
 
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Stock used</Text>
             <Text style={[styles.cardText, { color: colors.mutedForeground }]}>
-              Stock is deducted as soon as it is added to this ticket.
+              Stock is deducted from the selected Field Agent as soon as it is added to this ticket.
             </Text>
             {ticketStockUsage.length ? (
               <View style={styles.stockUsageList}>
@@ -725,7 +810,9 @@ export default function AgentHomeScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.attachmentName, { color: colors.foreground }]}>{usage.stockItemName}</Text>
                       <Text style={[styles.attachmentMeta, { color: colors.mutedForeground }]}>
-                        {usage.deductedAt ? 'Deducted from stock' : 'Not deducted'}
+                        {usage.deductedAt
+                          ? `Deducted from ${usage.fieldAgentName ?? 'stock'}`
+                          : 'Not deducted'}
                       </Text>
                     </View>
                     <View style={styles.stockUsageTrailing}>
@@ -745,24 +832,70 @@ export default function AgentHomeScreen() {
             ) : (
               <Text style={[styles.cardText, { color: colors.mutedForeground }]}>No stock recorded for this ticket.</Text>
             )}
-            {editingTicket?.status === 'closed' ? null : stockItems.length ? (
+            {editingTicket?.status === 'closed' ? null : (
               <>
-                <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollRow}>
-                  {stockItems.map((item) => (
-                    <Pressable
-                      key={item.id}
-                      onPress={() => setSelectedStockId(item.id)}
-                      style={[
-                        styles.chip,
-                        { borderColor: colors.border, backgroundColor: selectedStockId === item.id ? colors.primary : colors.card },
-                      ]}
-                    >
-                      <Text style={[styles.chipText, { color: selectedStockId === item.id ? colors.primaryForeground : colors.foreground }]}>
-                        {item.name} ({item.quantityOnHand} {item.unit})
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                <Text style={[styles.cardText, { color: colors.mutedForeground }]}>Field Agent</Text>
+                {fieldAgents.length ? (
+                  <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollRow}>
+                    {fieldAgents.map((agent) => (
+                      <Pressable
+                        key={agent.id}
+                        onPress={() => {
+                          setSelectedFieldAgentId(agent.id);
+                          setSelectedStockId(null);
+                        }}
+                        style={[
+                          styles.chip,
+                          { borderColor: colors.border, backgroundColor: selectedFieldAgentId === agent.id ? colors.primary : colors.card },
+                        ]}
+                      >
+                        <Text style={[styles.chipText, { color: selectedFieldAgentId === agent.id ? colors.primaryForeground : colors.foreground }]}>
+                          {agent.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={[styles.cardText, { color: colors.mutedForeground }]}>
+                    No Field Agents are available. Add them from the web Stock page.
+                  </Text>
+                )}
+
+                <Text style={[styles.cardText, { color: colors.mutedForeground }]}>Available stock with Field Agent</Text>
+                {selectedFieldAgent && stockItems.some((item) =>
+                  selectedFieldAgent.inventory.some((balance) => balance.stockItemId === item.id && balance.quantityOnHand > 0),
+                ) ? (
+                  <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollRow}>
+                    {stockItems
+                      .filter((item) => selectedFieldAgent.inventory.some((balance) => balance.stockItemId === item.id && balance.quantityOnHand > 0))
+                      .map((item) => {
+                        const available = selectedFieldAgent.inventory.find((balance) => balance.stockItemId === item.id)?.quantityOnHand ?? 0;
+                        return (
+                          <Pressable
+                            key={item.id}
+                            onPress={() => setSelectedStockId(item.id)}
+                            style={[
+                              styles.chip,
+                              { borderColor: colors.border, backgroundColor: selectedStockId === item.id ? colors.primary : colors.card },
+                            ]}
+                          >
+                            <Text style={[styles.chipText, { color: selectedStockId === item.id ? colors.primaryForeground : colors.foreground }]}>
+                              {item.name} ({available} {item.unit})
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                  </ScrollView>
+                ) : selectedFieldAgent ? (
+                  <Text style={[styles.cardText, { color: colors.mutedForeground }]}>
+                    No stock items are available. Add them from the web Stock page.
+                  </Text>
+                ) : (
+                  <Text style={[styles.cardText, { color: colors.mutedForeground }]}>
+                    Select a Field Agent to see their available stock.
+                  </Text>
+                )}
+
                 <View style={styles.stockUsageActions}>
                   <TextInput
                     style={[styles.stockQuantityInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
@@ -775,8 +908,8 @@ export default function AgentHomeScreen() {
                   />
                   <Pressable
                     onPress={() => void handleAddStockUsage()}
-                    disabled={isSavingStockUsage || !selectedStockId || !Number.isSafeInteger(Number(stockQuantity)) || Number(stockQuantity) < 1}
-                    style={[styles.modalButton, { backgroundColor: colors.primary }, (isSavingStockUsage || !selectedStockId) && styles.disabled]}
+                    disabled={isSavingStockUsage || !selectedFieldAgentId || !selectedStockId || !Number.isSafeInteger(Number(stockQuantity)) || Number(stockQuantity) < 1}
+                    style={[styles.modalButton, { backgroundColor: colors.primary }, (isSavingStockUsage || !selectedFieldAgentId || !selectedStockId) && styles.disabled]}
                   >
                     <Text style={[styles.modalButtonText, { color: colors.primaryForeground }]}>
                       {isSavingStockUsage ? 'Saving…' : 'Add stock'}
@@ -784,8 +917,6 @@ export default function AgentHomeScreen() {
                   </Pressable>
                 </View>
               </>
-            ) : (
-              <Text style={[styles.cardText, { color: colors.mutedForeground }]}>No stock items are available. Add them from the web Stock page.</Text>
             )}
 
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Priority</Text>
@@ -898,7 +1029,7 @@ export default function AgentHomeScreen() {
                 )}
               </Pressable>
             </View>
-          </ScrollView>
+          </KeyboardAwareScrollViewCompat>
         </View>
       </Modal>
     </View>

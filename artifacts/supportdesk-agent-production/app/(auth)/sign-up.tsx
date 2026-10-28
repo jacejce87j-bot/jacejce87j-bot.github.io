@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { getProductionApiBaseUrl } from '@/components/ProductionApiProvider';
 import { configureNativeApiTransport } from '@workspace/api-client-react';
 import { tokenStorage } from '@/lib/storage';
+import { BACKUP_API, fetchWithFallback } from '@/lib/api';
 
 export default function SignUpScreen() {
   const colors = useColors();
@@ -26,9 +27,7 @@ export default function SignUpScreen() {
     setErrorMessage('');
 
     try {
-      const targetUrl = `${baseUrl}/api/auth/register`;
-
-      const response = await fetch(targetUrl, {
+      const response = await fetchWithFallback('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +57,7 @@ export default function SignUpScreen() {
       if (data.token) {
         await tokenStorage.setItem('userToken', data.token);
         try {
-          configureNativeApiTransport(baseUrl, data.token);
+          configureNativeApiTransport(baseUrl, data.token, BACKUP_API);
         } catch (e) {
           try {
             if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {

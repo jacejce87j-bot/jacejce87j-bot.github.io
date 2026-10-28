@@ -11,6 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { getListTicketTemplatesQueryKey, useListTicketTemplates } from '@workspace/api-client-react';
+import { fetchWithFallback } from '@/lib/api';
 
 interface EditTicketModalProps {
   visible: boolean;
@@ -150,9 +151,7 @@ export function EditTicketModal({ visible, ticket, agents, onClose, onSave }: Ed
         finalDescription = [built, description.trim()].filter(Boolean).join('\n\n');
       }
 
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5000';
-
-      const res = await fetch(`${baseUrl}/api/tickets/${ticket.id}`, {
+      const res = await fetchWithFallback(`/api/tickets/${ticket.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

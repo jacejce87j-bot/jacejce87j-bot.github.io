@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS organizations (
   domain TEXT,
   industry TEXT,
   plan TEXT,
+  address TEXT,
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
   tags TEXT[] NOT NULL DEFAULT '{}',
   due_at TIMESTAMP WITH TIME ZONE,
+  scheduled_at TIMESTAMP WITH TIME ZONE,
   first_response_at TIMESTAMP WITH TIME ZONE,
   resolved_at TIMESTAMP WITH TIME ZONE,
   satisfaction TEXT,
@@ -109,6 +111,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     'ticket_usage_reversal',
     'transfer_to_field_agent',
     'received_by_field_agent',
+    'return_from_field_agent',
+    'received_by_orion_stock',
     'field_agent_ticket_usage',
     'field_agent_ticket_usage_reversal'
   )),
@@ -194,6 +198,32 @@ CREATE TABLE IF NOT EXISTS ticket_templates (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS ticket_macros (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'all'
+    CHECK (scope IN ('all', 'description', 'public_comment', 'internal_comment')),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS macro_usage_events (
+  id SERIAL PRIMARY KEY,
+  macro_id INTEGER NOT NULL REFERENCES ticket_macros(id) ON DELETE CASCADE,
+  user_id TEXT,
+  ticket_id INTEGER,
+  scope TEXT NOT NULL
+    CHECK (scope IN ('description', 'public_comment', 'internal_comment')),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS macro_usage_events_macro_id_idx
+  ON macro_usage_events (macro_id);
+CREATE INDEX IF NOT EXISTS macro_usage_events_created_at_idx
+  ON macro_usage_events (created_at);
 
 -- Create attachments table to store uploaded file bytes
 CREATE TABLE IF NOT EXISTS attachments (

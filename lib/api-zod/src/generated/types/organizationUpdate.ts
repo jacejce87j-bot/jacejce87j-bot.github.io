@@ -15,5 +15,7 @@ export interface OrganizationUpdate {
   /** @nullable */
   plan?: string | null;
   /** @nullable */
+  address?: string | null;
+  /** @nullable */
   notes?: string | null;
 }

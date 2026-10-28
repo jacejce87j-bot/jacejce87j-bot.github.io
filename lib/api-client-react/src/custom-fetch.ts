@@ -5,10 +5,74 @@
 export type ErrorType<T> = Error | T;
 export type BodyType<T = unknown> = T;
 
-export const configureNativeApiTransport = (baseUrl: string, token?: string) => {
+export type ApiFallbackEndpoints = {
+  primaryApi: string;
+  backupApi: string;
+};
+
+let configuredBackupBaseUrl: string | undefined;
+
+const resolveApiUrl = (baseUrl: string, path: string) => {
+  const cleanBase = baseUrl.replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${cleanBase}${cleanPath}`;
+};
+
+export const fetchWithFallback = async (
+  path: string,
+  options: RequestInit = {},
+  endpoints: ApiFallbackEndpoints,
+): Promise<Response> => {
+  const targetPath = /^https?:\/\//i.test(path)
+    ? `${new URL(path).pathname}${new URL(path).search}${new URL(path).hash}`
+    : path;
+  const primaryUrl = resolveApiUrl(endpoints.primaryApi, targetPath);
+  const backupUrl = resolveApiUrl(endpoints.backupApi, targetPath);
+  let primaryResponse: Response | undefined;
+  let primaryError: unknown;
+
+  try {
+    primaryResponse = await fetch(primaryUrl, options);
+    if (primaryResponse.status < 500) {
+      console.info("[API] Request served by primary endpoint");
+      return primaryResponse;
+    }
+    console.warn(`[API] Primary endpoint returned HTTP ${primaryResponse.status}; retrying via backup`);
+  } catch (error) {
+    primaryError = error;
+    console.warn("[API] Primary endpoint was unreachable; retrying via backup");
+  }
+
+  try {
+    const backupResponse = await fetch(backupUrl, options);
+    if (backupResponse.status < 500) {
+      console.info("[API] Request served by Tailscale backup endpoint");
+    } else {
+      console.warn(`[API] Tailscale backup endpoint returned HTTP ${backupResponse.status}`);
+    }
+    return backupResponse;
+  } catch (backupError) {
+    const primaryFailure = primaryResponse
+      ? `Primary endpoint returned HTTP ${primaryResponse.status}`
+      : primaryError instanceof Error
+        ? primaryError.message
+        : "Primary endpoint failed";
+    const backupFailure = backupError instanceof Error ? backupError.message : "Backup endpoint failed";
+    throw new Error(`API request failed on both endpoints. ${primaryFailure}; ${backupFailure}`);
+  }
+};
+
+export const configureNativeApiTransport = (baseUrl: string, token?: string, backupBaseUrl?: string) => {
+  configuredBackupBaseUrl = backupBaseUrl?.replace(/\/+$/, "");
+
   if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
     try {
       window.localStorage.setItem("api_base_url", baseUrl);
+      if (configuredBackupBaseUrl) {
+        window.localStorage.setItem("api_backup_base_url", configuredBackupBaseUrl);
+      } else {
+        window.localStorage.removeItem("api_backup_base_url");
+      }
       if (token) window.localStorage.setItem("auth_token", token);
     } catch (e) {
       // ignore
@@ -17,6 +81,7 @@ export const configureNativeApiTransport = (baseUrl: string, token?: string) => 
 
   try {
     (globalThis as any).__API_BASE_URL__ = baseUrl;
+    (globalThis as any).__API_BACKUP_BASE_URL__ = configuredBackupBaseUrl;
     if (token) (globalThis as any).__AUTH_TOKEN__ = token;
   } catch (e) {
     // ignore
@@ -26,11 +91,14 @@ export const configureNativeApiTransport = (baseUrl: string, token?: string) => 
 export const clearNativeApiTransport = () => {
   if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
     window.localStorage.removeItem("api_base_url");
+    window.localStorage.removeItem("api_backup_base_url");
     window.localStorage.removeItem("auth_token");
   }
   try {
     if ((globalThis as any).__API_BASE_URL__) delete (globalThis as any).__API_BASE_URL__;
+    if ((globalThis as any).__API_BACKUP_BASE_URL__) delete (globalThis as any).__API_BACKUP_BASE_URL__;
     if ((globalThis as any).__AUTH_TOKEN__) delete (globalThis as any).__AUTH_TOKEN__;
+    configuredBackupBaseUrl = undefined;
   } catch (e) {
     // ignore
   }
@@ -103,10 +171,27 @@ export const customFetch = async <T>(
   }
 
   console.log("[customFetch] Sending request...");
-  const response = await fetch(fullUrl, {
+  const requestOptions = {
     ...options,
     headers,
-  });
+  };
+  const backupBaseUrl =
+    configuredBackupBaseUrl ||
+    (globalThis as any).__API_BACKUP_BASE_URL__ ||
+    (typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+      ? window.localStorage.getItem("api_backup_base_url")
+      : undefined);
+  const primaryBaseUrl =
+    (globalThis as any).__API_BASE_URL__ ||
+    (typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+      ? window.localStorage.getItem("api_base_url")
+      : undefined);
+  const response = backupBaseUrl && primaryBaseUrl
+    ? await fetchWithFallback(fullUrl, requestOptions, {
+        primaryApi: primaryBaseUrl,
+        backupApi: backupBaseUrl,
+      })
+    : await fetch(fullUrl, requestOptions);
   console.log("[customFetch] Response status:", response.status);
 
   if (response.status === 401) {

@@ -51,6 +51,7 @@ const formSchema = z.object({
   requesterId: z.coerce.number().optional().nullable(),
   assigneeId: z.coerce.number().optional().nullable(),
   organizationId: z.coerce.number().optional().nullable(),
+  scheduledAt: z.string().optional(),
 }).refine((values) => Number.isSafeInteger(values.requesterId) && Number(values.requesterId) > 0, {
   path: ["requesterId"],
   message: "Requester is required",
@@ -284,6 +285,7 @@ export default function NewTicket() {
       requesterId: null,
       assigneeId: null,
       organizationId: null,
+      scheduledAt: "",
     },
   });
 
@@ -342,6 +344,7 @@ export default function NewTicket() {
         deviceType: selectedCameraType,
         description: finalDescription || undefined,
         attachments: ticketAttachments,
+        scheduledAt: data.scheduledAt ? new Date(data.scheduledAt).toISOString() : null,
       } as any,
     });
   };
@@ -734,6 +737,30 @@ export default function NewTicket() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {(() => {
+                    const selectedOrganization = organizations.find((org) => org.id === form.watch("organizationId"));
+                    return selectedOrganization?.address ? (
+                      <div className="md:col-span-2 rounded-md border bg-muted/30 p-3 text-sm">
+                        <div className="font-medium">Job address</div>
+                        <div className="text-muted-foreground">{selectedOrganization.address}</div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <FormField
+                    control={form.control}
+                    name="scheduledAt"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Booking date and time</FormLabel>
+                        <FormControl>
+                          <Input type="datetime-local" {...field} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

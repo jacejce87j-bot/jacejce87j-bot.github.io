@@ -19,7 +19,7 @@ export default function OrganizationList() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", domain: "", industry: "", plan: "", notes: "" });
+  const [form, setForm] = useState({ name: "", domain: "", industry: "", plan: "", address: "", notes: "" });
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createOrganization = useCreateOrganization({
@@ -27,7 +27,7 @@ export default function OrganizationList() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
         setOpen(false);
-        setForm({ name: "", domain: "", industry: "", plan: "", notes: "" });
+        setForm({ name: "", domain: "", industry: "", plan: "", address: "", notes: "" });
         toast({ title: "Organization added" });
       },
       onError: () => toast({ title: "Could not add organization", description: "Check the required fields and try again.", variant: "destructive" }),
@@ -193,11 +193,12 @@ export default function OrganizationList() {
             <div className="grid gap-2"><Label htmlFor="org-domain">Domain</Label><Input id="org-domain" value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} placeholder="acme.com" /></div>
             <div className="grid gap-2"><Label htmlFor="org-industry">Industry</Label><Input id="org-industry" value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} placeholder="Software" /></div>
             <div className="grid gap-2"><Label htmlFor="org-plan">Plan</Label><Input id="org-plan" value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} placeholder="Enterprise" /></div>
+            <div className="grid gap-2"><Label htmlFor="org-address">Service address</Label><Input id="org-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Address shown on job cards" /></div>
             <div className="grid gap-2"><Label htmlFor="org-notes">Notes</Label><Input id="org-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional context" /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={createOrganization.isPending || !form.name.trim()} onClick={() => createOrganization.mutate({ data: { name: form.name.trim(), domain: form.domain.trim() || undefined, industry: form.industry.trim() || undefined, plan: form.plan.trim() || undefined, notes: form.notes.trim() || undefined } })}>{createOrganization.isPending ? "Adding..." : "Add organization"}</Button>
+            <Button disabled={createOrganization.isPending || !form.name.trim()} onClick={() => createOrganization.mutate({ data: { name: form.name.trim(), domain: form.domain.trim() || undefined, industry: form.industry.trim() || undefined, plan: form.plan.trim() || undefined, address: form.address.trim() || undefined, notes: form.notes.trim() || undefined } })}>{createOrganization.isPending ? "Adding..." : "Add organization"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

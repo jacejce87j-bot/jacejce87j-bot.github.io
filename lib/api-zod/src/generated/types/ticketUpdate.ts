@@ -29,6 +29,8 @@ export interface TicketUpdate {
   /** @nullable */
   dueAt?: string | null;
   /** @nullable */
+  scheduledAt?: string | null;
+  /** @nullable */
   satisfaction?: string | null;
   attachments?: TicketAttachment[];
 }

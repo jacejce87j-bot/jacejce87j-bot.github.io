@@ -93,6 +93,8 @@ export interface Organization {
   /** @nullable */
   plan?: string | null;
   /** @nullable */
+  address?: string | null;
+  /** @nullable */
   notes?: string | null;
   contactCount?: number;
   ticketCount?: number;
@@ -156,6 +158,8 @@ export interface Ticket {
   tags?: string[];
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  scheduledAt?: string | null;
   /** @nullable */
   firstResponseAt?: string | null;
   /** @nullable */
@@ -251,6 +255,8 @@ export interface TicketInput {
   tags?: string[];
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  scheduledAt?: string | null;
   client?: string | null;
   fleetNum?: string | null;
   reg?: string | null;
@@ -330,6 +336,8 @@ export interface TicketUpdate {
   tags?: string[];
   /** @nullable */
   dueAt?: string | null;
+  /** @nullable */
+  scheduledAt?: string | null;
   /** @nullable */
   satisfaction?: string | null;
   client?: string | null;
@@ -551,6 +559,7 @@ export interface OrganizationInput {
   domain?: string;
   industry?: string;
   plan?: string;
+  address?: string;
   notes?: string;
 }
 
@@ -563,6 +572,8 @@ export interface OrganizationUpdate {
   /** @nullable */
   plan?: string | null;
   /** @nullable */
+  /** @nullable */
+  address?: string | null;
   notes?: string | null;
 }
 

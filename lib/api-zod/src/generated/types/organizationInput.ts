@@ -12,5 +12,6 @@ export interface OrganizationInput {
   domain?: string;
   industry?: string;
   plan?: string;
+  address?: string;
   notes?: string;
 }

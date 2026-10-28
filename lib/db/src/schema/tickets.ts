@@ -26,6 +26,7 @@ export const ticketsTable = pgTable("tickets", {
   organizationId: integer("organization_id").references(() => organizationsTable.id, { onDelete: "set null" }),
   tags: text("tags").array().notNull().default([]),
   dueAt: timestamp("due_at", { withTimezone: true }),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   satisfaction: text("satisfaction"),

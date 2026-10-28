@@ -51,6 +51,13 @@ type TicketStockUsage = {
   deductedAt: string | null;
 };
 
+function toLocalDateTimeInput(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function TicketDetail() {
   const [, params] = useRoute("/tickets/:id");
   const [, setLocation] = useLocation();
@@ -58,6 +65,7 @@ export default function TicketDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useSupportUser();
+  const [scheduledAtInput, setScheduledAtInput] = useState("");
   
   const { data: ticket, isLoading: isLoadingTicket } = useGetTicket(ticketId, {
     query: {
@@ -85,6 +93,10 @@ export default function TicketDetail() {
       }
     }
   });
+
+  useEffect(() => {
+    setScheduledAtInput(ticket?.scheduledAt ? toLocalDateTimeInput(ticket.scheduledAt) : "");
+  }, [ticket?.scheduledAt]);
 
   const createComment = useCreateTicketComment({
     mutation: {
@@ -134,6 +146,18 @@ export default function TicketDetail() {
           variant: "destructive",
         }),
       },
+    );
+  };
+
+  const saveScheduledAt = () => {
+    const scheduledAt = scheduledAtInput ? new Date(scheduledAtInput) : null;
+    if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
+      toast({ title: "Invalid booking date and time", variant: "destructive" });
+      return;
+    }
+    updateTicket.mutate(
+      { id: ticketId, data: { scheduledAt: scheduledAt?.toISOString() ?? null } },
+      { onError: () => toast({ title: "Could not save booking date and time", variant: "destructive" }) },
     );
   };
 
@@ -989,6 +1013,9 @@ export default function TicketDetail() {
                     <Link href={`/organizations/${ticket.organization.id}`} className="text-sm font-medium hover:underline flex items-center gap-2">
                       <Globe className="h-3 w-3" /> {ticket.organization.name}
                     </Link>
+                    {ticket.organization.address && (
+                      <div className="mt-1 text-sm text-muted-foreground">{ticket.organization.address}</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -999,6 +1026,23 @@ export default function TicketDetail() {
               <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Dates & SLA</h3>
               
               <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="ticket-scheduled-at" className="text-xs font-medium">Booking date and time</Label>
+                  <Input
+                    id="ticket-scheduled-at"
+                    type="datetime-local"
+                    value={scheduledAtInput}
+                    onChange={(event) => setScheduledAtInput(event.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={updateTicket.isPending || scheduledAtInput === (ticket.scheduledAt ? toLocalDateTimeInput(ticket.scheduledAt) : "")}
+                    onClick={saveScheduledAt}
+                  >
+                    {updateTicket.isPending ? "Saving..." : "Save booking"}
+                  </Button>
+                </div>
                 {ticket.dueAt && (
                   <div className="flex items-start gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />

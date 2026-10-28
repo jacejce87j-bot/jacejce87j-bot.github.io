@@ -8,6 +8,7 @@ export const organizationsTable = pgTable("organizations", {
   domain: text("domain"),
   industry: text("industry"),
   plan: text("plan"),
+  address: text("address"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

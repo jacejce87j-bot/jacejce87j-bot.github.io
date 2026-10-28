@@ -22,6 +22,12 @@
       "eas": {
         "projectId": "8ae22d43-b4f1-47f3-abea-d785ae9d46f9"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "com.supportdesk.agent",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     }
   }
 }

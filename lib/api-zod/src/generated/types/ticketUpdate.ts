@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TicketAttachment } from './ticketAttachment';
+import type { TicketTemplateValue } from './ticketTemplateValue';
 import type { TicketUpdateChannel } from './ticketUpdateChannel';
 import type { TicketUpdatePriority } from './ticketUpdatePriority';
 import type { TicketUpdateStatus } from './ticketUpdateStatus';
@@ -30,6 +31,7 @@ export interface TicketUpdate {
   dueAt?: string | null;
   /** @nullable */
   scheduledAt?: string | null;
+  templateData?: TicketTemplateValue[];
   /** @nullable */
   satisfaction?: string | null;
   attachments?: TicketAttachment[];

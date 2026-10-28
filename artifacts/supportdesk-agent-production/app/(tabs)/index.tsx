@@ -61,6 +61,7 @@ type TicketStockUsage = {
   quantity: number;
   deductedAt: string | null;
 };
+type DeviceTypeOption = { id: number; name: string };
 
 const STATUS_OPTIONS = ['new', 'open', 'pending', 'solved', 'closed'];
 type MobileTicketPriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -148,6 +149,10 @@ export default function AgentHomeScreen() {
   const [editTemplateId, setEditTemplateId] = useState<number | null>(null);
   const [editTemplateFields, setEditTemplateFields] = useState<any[] | null>(null);
   const [editTemplateValues, setEditTemplateValues] = useState<Record<string, string>>({});
+  const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
+  const [cameraDeviceTypes, setCameraDeviceTypes] = useState<DeviceTypeOption[]>([]);
+  const [deviceTypeError, setDeviceTypeError] = useState('');
+  const [openEditTemplateDropdown, setOpenEditTemplateDropdown] = useState<string | null>(null);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
   const [ticketStockUsage, setTicketStockUsage] = useState<TicketStockUsage[]>([]);
@@ -156,6 +161,29 @@ export default function AgentHomeScreen() {
   const [stockQuantity, setStockQuantity] = useState('1');
   const [isSavingStockUsage, setIsSavingStockUsage] = useState(false);
   const selectedFieldAgent = fieldAgents.find((agent) => agent.id === selectedFieldAgentId) ?? null;
+
+  useEffect(() => {
+    let active = true;
+    const loadDeviceTypes = async () => {
+      try {
+        const [trackingResponse, cameraResponse] = await Promise.all([
+          fetchWithFallback('/api/device-types?category=tracking', { headers: { Accept: 'application/json' } }),
+          fetchWithFallback('/api/device-types?category=camera', { headers: { Accept: 'application/json' } }),
+        ]);
+        if (!trackingResponse.ok || !cameraResponse.ok) throw new Error('Device types could not be loaded.');
+        const [trackingData, cameraData] = await Promise.all([trackingResponse.json(), cameraResponse.json()]);
+        if (active) {
+          setTrackingDeviceTypes(Array.isArray(trackingData) ? trackingData : []);
+          setCameraDeviceTypes(Array.isArray(cameraData) ? cameraData : []);
+          setDeviceTypeError('');
+        }
+      } catch (loadError) {
+        if (active) setDeviceTypeError(loadError instanceof Error ? loadError.message : 'Device types could not be loaded.');
+      }
+    };
+    void loadDeviceTypes();
+    return () => { active = false; };
+  }, []);
 
   const loadStockItems = useCallback(async () => {
     const token = await getToken();
@@ -347,9 +375,31 @@ export default function AgentHomeScreen() {
 
     if (template.fields && template.fields.length) {
       setEditTemplateFields(template.fields);
+      const savedValues = new Map(
+        (editingTicket?.templateData ?? []).map((field: any) => [
+          String(field.key || '').toLowerCase().replace(/[^a-z0-9]/g, ''),
+          String(field.value ?? ''),
+        ]),
+      );
+      const descriptionValues = new Map<string, string>();
+      for (const line of String(editingTicket?.description ?? '').split(/\r?\n/)) {
+        const match = line.match(/^\s*([^:]+):\s*(.*)$/);
+        if (match) descriptionValues.set(match[1].toLowerCase().replace(/[^a-z0-9]/g, ''), match[2].trim());
+      }
       setEditTemplateValues(Object.fromEntries(template.fields.map((field: any) => {
-        const key = String(field.key || '').replace(/[_-](.)/g, (_match, character) => String(character).toUpperCase());
-        return [field.key, editingTicket?.[key] ?? editingTicket?.[field.key] ?? ''];
+        const key = String(field.key || field.label || '').replace(/[_-](.)/g, (_match, character) => String(character).toUpperCase());
+        const compactKey = String(field.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const compactLabel = String(field.label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return [
+          field.key,
+          savedValues.get(compactKey)
+            ?? savedValues.get(compactLabel)
+            ?? descriptionValues.get(compactLabel)
+            ?? editingTicket?.[key]
+            ?? editingTicket?.[field.key]
+            ?? field.value
+            ?? '',
+        ];
       })));
       setEditDescription(template.description ?? '');
       return;
@@ -385,10 +435,13 @@ export default function AgentHomeScreen() {
           priority: toApiPriority(editPriority),
           scheduledAt: editScheduledAt ? new Date(editScheduledAt).toISOString() : null,
           assigneeId: editAssigneeId,
-          ...Object.fromEntries((editTemplateFields ?? []).map((field: any) => {
-            const key = String(field.key || '').replace(/[_-](.)/g, (_match, character) => String(character).toUpperCase());
-            return [key, editTemplateValues[field.key] ?? ''];
-          })),
+          ...(editTemplateFields ? {
+            templateData: editTemplateFields.map((field: any) => ({
+              key: String(field.key || field.label || ''),
+              label: String(field.label || field.name || field.key || 'Field'),
+              value: editTemplateValues[field.key] ?? '',
+            })),
+          } : {}),
         },
       });
       if (editStatus === 'closed') await loadStockItems();
@@ -595,6 +648,12 @@ export default function AgentHomeScreen() {
                     </Text>
                   </View>
                 ) : null}
+                {ticket.templateData?.filter((field) => field.value).map((field) => (
+                  <View key={field.key} style={styles.ticketDetailRow}>
+                    <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>{field.label}</Text>
+                    <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>{field.value}</Text>
+                  </View>
+                ))}
                 <View style={styles.ticketDetailRow}>
                   <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>Assigned to</Text>
                   <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>{ticket.assignee?.name ?? 'Unassigned'}</Text>
@@ -988,15 +1047,75 @@ export default function AgentHomeScreen() {
                 {editTemplateFields.map((field) => (
                   <View key={field.key} style={{ gap: 6 }}>
                     <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>{field.label}{field.required ? ' *' : ''}</Text>
-                    <TextInput
-                      style={[styles.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                      value={editTemplateValues[field.key] ?? ''}
-                      onChangeText={(text) => setEditTemplateValues((current) => ({ ...current, [field.key]: text }))}
-                      placeholder={field.label}
-                      placeholderTextColor={colors.mutedForeground}
-                    />
+                    {/^(channel[1-8]|channel|trackingType|deviceType)$/.test(field.key) ? (() => {
+                      const isChannel = /^channel[1-8]$/.test(field.key) || field.key === 'channel';
+                      const options = isChannel
+                        ? Array.from({ length: 8 }, (_, index) => ({ id: index + 1, name: `Channel ${index + 1}` }))
+                        : field.key === 'trackingType' ? trackingDeviceTypes : cameraDeviceTypes;
+                      const selectedValue = editTemplateValues[field.key] ?? '';
+                      const dropdownOpen = openEditTemplateDropdown === field.key;
+                      return (
+                        <>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Select ${field.label}`}
+                            accessibilityState={{ expanded: dropdownOpen }}
+                            onPress={() => setOpenEditTemplateDropdown(dropdownOpen ? null : field.key)}
+                            style={[styles.selectTrigger, { backgroundColor: colors.background, borderColor: colors.border }]}
+                          >
+                            <Text style={[styles.selectTriggerText, { color: selectedValue ? colors.foreground : colors.mutedForeground }]}>
+                              {selectedValue || (isChannel ? 'Select channel' : `Select ${field.key === 'trackingType' ? 'tracking' : 'camera'} device type`)}
+                            </Text>
+                            <Feather name={dropdownOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+                          </Pressable>
+                          {dropdownOpen ? (
+                            <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                              <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                                {!isChannel ? (
+                                  <Pressable
+                                    onPress={() => {
+                                      setEditTemplateValues((current) => ({ ...current, [field.key]: '' }));
+                                      setOpenEditTemplateDropdown(null);
+                                    }}
+                                    style={[styles.dropdownOption, { borderColor: colors.border }]}
+                                  >
+                                    <Text style={[styles.dropdownOptionText, { color: colors.mutedForeground }]}>No device selected</Text>
+                                  </Pressable>
+                                ) : null}
+                                {options.map((option) => (
+                                  <Pressable
+                                    key={option.id}
+                                    onPress={() => {
+                                      setEditTemplateValues((current) => ({ ...current, [field.key]: option.name }));
+                                      setOpenEditTemplateDropdown(null);
+                                    }}
+                                    style={[styles.dropdownOption, { borderColor: colors.border }]}
+                                  >
+                                    <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{option.name}</Text>
+                                  </Pressable>
+                                ))}
+                                {!isChannel && !options.length ? (
+                                  <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>
+                                    {deviceTypeError || 'No device types available.'}
+                                  </Text>
+                                ) : null}
+                              </ScrollView>
+                            </View>
+                          ) : null}
+                        </>
+                      );
+                    })() : (
+                      <TextInput
+                        style={[styles.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                        value={editTemplateValues[field.key] ?? ''}
+                        onChangeText={(text) => setEditTemplateValues((current) => ({ ...current, [field.key]: text }))}
+                        placeholder={field.label}
+                        placeholderTextColor={colors.mutedForeground}
+                      />
+                    )}
                   </View>
                 ))}
+                {deviceTypeError ? <Text style={styles.error}>{deviceTypeError}</Text> : null}
               </View>
             ) : null}
 
@@ -1114,6 +1233,14 @@ const styles = StyleSheet.create({
   textInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter_400Regular', fontSize: 14 },
   textAreaInput: { height: 100, textAlignVertical: 'top' },
   templateFieldGroup: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 8 },
+  selectTrigger: { minHeight: 46, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  selectTriggerText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  dropdown: { borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 6 },
+  dropdownOptions: { maxHeight: 180 },
+  dropdownOption: { minHeight: 42, borderBottomWidth: StyleSheet.hairlineWidth, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8 },
+  dropdownOptionText: { fontFamily: 'Inter_400Regular', fontSize: 13 },
+  dropdownMessage: { padding: 12, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  error: { color: '#D64545', fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 4 },
   horizontalScrollRow: { gap: 8, paddingVertical: 4 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },

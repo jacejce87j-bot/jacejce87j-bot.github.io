@@ -13,6 +13,12 @@ export type TicketAttachment = {
   uploadedAt: string;
 };
 
+export type TicketTemplateValue = {
+  key: string;
+  label: string;
+  value: string;
+};
+
 export const ticketsTable = pgTable("tickets", {
   id: serial("id").primaryKey(),
   subject: text("subject").notNull(),
@@ -32,6 +38,7 @@ export const ticketsTable = pgTable("tickets", {
   satisfaction: text("satisfaction"),
   mergedIntoId: integer("merged_into_id"),
   attachments: jsonb("attachments").$type<TicketAttachment[]>().notNull().default([]),
+  templateData: jsonb("template_data").$type<TicketTemplateValue[]>().notNull().default([]),
   client: text("client"),
   fleetNum: text("fleet_num"),
   reg: text("reg"),

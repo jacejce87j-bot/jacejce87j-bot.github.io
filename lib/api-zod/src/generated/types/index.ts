@@ -70,6 +70,7 @@ export * from './ticketStatus';
 export * from './ticketTemplate';
 export * from './ticketTemplateInput';
 export * from './ticketTemplateUpdate';
+export * from './ticketTemplateValue';
 export * from './ticketType';
 export * from './ticketUpdate';
 export * from './ticketUpdateChannel';

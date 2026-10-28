@@ -1,0 +1,2 @@
+ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS template_data JSONB NOT NULL DEFAULT '[]'::jsonb;

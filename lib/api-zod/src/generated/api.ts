@@ -111,6 +111,11 @@ export const ListTicketsResponse = zod.object({
   "objectPath": zod.string(),
   "uploadedAt": zod.string()
 })).optional(),
+"templateData": zod.array(zod.object({
+"key": zod.string(),
+"label": zod.string(),
+"value": zod.string()
+})).optional(),
 "client": zod.string().nullish(),
 "fleetNum": zod.string().nullish(),
 "reg": zod.string().nullish(),
@@ -157,6 +162,11 @@ export const CreateTicketBody = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "dueAt": zod.string().nullish(),
   "scheduledAt": zod.string().nullish(),
+  "templateData": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
+})).optional(),
   "client": zod.string().nullish(),
   "fleetNum": zod.string().nullish(),
   "reg": zod.string().nullish(),
@@ -265,6 +275,11 @@ export const GetTicketResponse = zod.object({
   "objectPath": zod.string(),
   "uploadedAt": zod.string()
 })).optional(),
+  "templateData": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
+})).optional(),
   "client": zod.string().nullish(),
   "fleetNum": zod.string().nullish(),
   "reg": zod.string().nullish(),
@@ -309,6 +324,11 @@ export const UpdateTicketBody = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "dueAt": zod.string().nullish(),
   "scheduledAt": zod.string().nullish(),
+  "templateData": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
+})).optional(),
   "satisfaction": zod.string().nullish(),
   "client": zod.string().nullish(),
   "fleetNum": zod.string().nullish(),
@@ -409,6 +429,11 @@ export const UpdateTicketResponse = zod.object({
   "contentType": zod.string(),
   "objectPath": zod.string(),
   "uploadedAt": zod.string()
+})).optional(),
+  "templateData": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
 })).optional(),
   "client": zod.string().nullish(),
   "fleetNum": zod.string().nullish(),

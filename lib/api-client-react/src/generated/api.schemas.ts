@@ -137,6 +137,12 @@ export interface TicketAttachment {
   uploadedAt: string;
 }
 
+export interface TicketTemplateValue {
+  key: string;
+  label: string;
+  value: string;
+}
+
 export interface Ticket {
   id: number;
   subject: string;
@@ -169,6 +175,7 @@ export interface Ticket {
   /** @nullable */
   mergedIntoId?: number | null;
   attachments?: TicketAttachment[];
+  templateData?: TicketTemplateValue[];
   client?: string | null;
   fleetNum?: string | null;
   reg?: string | null;
@@ -257,6 +264,7 @@ export interface TicketInput {
   dueAt?: string | null;
   /** @nullable */
   scheduledAt?: string | null;
+  templateData?: TicketTemplateValue[];
   client?: string | null;
   fleetNum?: string | null;
   reg?: string | null;
@@ -338,6 +346,7 @@ export interface TicketUpdate {
   dueAt?: string | null;
   /** @nullable */
   scheduledAt?: string | null;
+  templateData?: TicketTemplateValue[];
   /** @nullable */
   satisfaction?: string | null;
   client?: string | null;

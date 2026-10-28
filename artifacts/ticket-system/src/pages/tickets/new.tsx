@@ -81,7 +81,6 @@ export default function NewTicket() {
 
   const [templateFields, setTemplateFields] = useState<any[] | null>(null);
   const [templateFieldValues, setTemplateFieldValues] = useState<Record<string,string>>({});
-  const [selectedTemplateFieldKeys, setSelectedTemplateFieldKeys] = useState<string[] | null>(null);
   const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<Array<{ id: number; name: string }>>([]);
   const [cameraDeviceTypes, setCameraDeviceTypes] = useState<Array<{ id: number; name: string }>>([]);
   const [ticketAttachments, setTicketAttachments] = useState<TicketAttachment[]>([]);
@@ -103,6 +102,12 @@ export default function NewTicket() {
       "numberplate": "reg",
       "reg no": "reg",
       "registration": "reg",
+      "camera id": "deviceId",
+      "camera cell no": "deviceCellNo",
+      "camera cell number": "deviceCellNo",
+      "camera iccid": "cameraIccid",
+      "tracking iccid": "trackingIccid",
+      "camera type": "deviceType",
       "cell phone": "deviceCellNo",
       "cell no": "deviceCellNo",
       "phone no": "deviceCellNo",
@@ -121,7 +126,6 @@ export default function NewTicket() {
       "tracking cell": "trackingCellNum",
       "tracking type": "trackingType",
       "trackingtype": "trackingType",
-      "camera type": "deviceType",
       "device type": "deviceType",
       "devicetype": "deviceType",
       "engine type": "engine",
@@ -137,22 +141,22 @@ export default function NewTicket() {
       "hours": "hours",
       "hrs": "hours",
       "channel": "channel",
-      "channel 1": "channel",
-      "channel 2": "channel",
-      "channel 3": "channel",
-      "channel 4": "channel",
-      "channel 5": "channel",
-      "channel 6": "channel",
-      "channel 7": "channel",
-      "channel 8": "channel",
-      "channel1": "channel",
-      "channel2": "channel",
-      "channel3": "channel",
-      "channel4": "channel",
-      "channel5": "channel",
-      "channel6": "channel",
-      "channel7": "channel",
-      "channel8": "channel",
+      "channel 1": "channel1",
+      "channel 2": "channel2",
+      "channel 3": "channel3",
+      "channel 4": "channel4",
+      "channel 5": "channel5",
+      "channel 6": "channel6",
+      "channel 7": "channel7",
+      "channel 8": "channel8",
+      "channel1": "channel1",
+      "channel2": "channel2",
+      "channel3": "channel3",
+      "channel4": "channel4",
+      "channel5": "channel5",
+      "channel6": "channel6",
+      "channel7": "channel7",
+      "channel8": "channel8",
     };
 
     if (aliases[raw]) {
@@ -171,57 +175,6 @@ export default function NewTicket() {
       })
       .join("");
   };
-  const installationFields = [
-    { key: "client", label: "Client" },
-    { key: "fleetNum", label: "Fleet Num" },
-    { key: "reg", label: "Reg" },
-    { key: "vin", label: "VIN" },
-    { key: "engine", label: "Engine" },
-    { key: "make", label: "Make" },
-    { key: "model", label: "Model" },
-    { key: "colour", label: "Colour" },
-    { key: "odo", label: "ODO" },
-    { key: "deviceId", label: "Device ID" },
-    { key: "deviceCellNo", label: "Device Cell No" },
-    { key: "trackingImei", label: "Tracking IMEI" },
-    { key: "trackingCellNum", label: "Tracking Cell Num" },
-    { key: "vesaNum", label: "VESA NUM" },
-    { key: "hours", label: "HOURS" },
-    { key: "channel", label: "Channel" },
-  ];
-
-  function templateHasVesa(template: any) {
-    if (!template) return false;
-    const fields = Array.isArray(template.fields) ? template.fields : [];
-    for (const f of fields) {
-      const k = normalizeTemplateFieldKey(String(f.key || f.label || ""));
-      if (k === 'vesaNum') return true;
-    }
-    const inferred = inferFieldsFromTemplateDescription(template.description || "");
-    for (const f of inferred) {
-      const k = normalizeTemplateFieldKey(String(f.key || f.label || ""));
-      if (k === 'vesaNum') return true;
-    }
-    return false;
-  }
-
-  function templateHasHours(template: any) {
-    if (!template) return false;
-    const fields = Array.isArray(template.fields) ? template.fields : [];
-    for (const f of fields) {
-      const k = normalizeTemplateFieldKey(String(f.key || f.label || ""));
-      if (k === 'hours') return true;
-    }
-    const inferred = inferFieldsFromTemplateDescription(template.description || "");
-    for (const f of inferred) {
-      const k = normalizeTemplateFieldKey(String(f.key || f.label || ""));
-      if (k === 'hours') return true;
-    }
-    return false;
-  }
-  const [installationValues, setInstallationValues] = useState<Record<string, string>>({});
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-
   useEffect(() => {
     const loadDeviceTypes = async () => {
       try {
@@ -235,12 +188,10 @@ export default function NewTicket() {
             headers: getAuthHeaders(),
           }),
         ]);
-
         const [trackingData, cameraData] = await Promise.all([
           trackingRes.ok ? trackingRes.json() : [],
           cameraRes.ok ? cameraRes.json() : [],
         ]);
-
         setTrackingDeviceTypes(Array.isArray(trackingData) ? trackingData : []);
         setCameraDeviceTypes(Array.isArray(cameraData) ? cameraData : []);
       } catch {
@@ -248,7 +199,6 @@ export default function NewTicket() {
         setCameraDeviceTypes([]);
       }
     };
-
     void loadDeviceTypes();
   }, []);
 
@@ -257,8 +207,6 @@ export default function NewTicket() {
     const sanitized = String(description ?? "").replace(/\\n/g, "\n");
     const lines = sanitized.split(/\\n|\r?\n/).map((l) => l.trim()).filter(Boolean);
     const out: Array<{ key: string; label: string; required?: boolean; value?: string }> = [];
-    const allowed = new Set(installationFields.map((f) => f.key).concat(["trackingType", "deviceType", "vesaNum", "hours"]));
-
     for (const line of lines) {
       const m = line.match(/^([^:]+):\s*(.*)$/);
       if (!m) continue;
@@ -266,7 +214,6 @@ export default function NewTicket() {
       const value = m[2].trim();
       const key = normalizeTemplateFieldKey(label);
       if (!key) continue;
-      if (!allowed.has(key)) continue;
       out.push({ key, label, value: value || undefined });
     }
 
@@ -321,15 +268,6 @@ export default function NewTicket() {
   };
 
   const onSubmit = (data: FormValues) => {
-    const installationPayload = Object.fromEntries(
-      installationFields
-        .filter((field) => field.key !== "channel")
-        .map((field) => [field.key, installationValues[field.key] ?? ''])
-    );
-
-    const selectedTrackingType = installationValues.trackingType ?? "";
-    const selectedCameraType = installationValues.deviceType ?? "";
-
     let finalDescription = data.description || '';
     if (templateFields && templateFields.length) {
       const built = templateFields.map((f: any) => `${f.label}: ${templateFieldValues[f.key] ?? ''}`).join('\n');
@@ -339,18 +277,17 @@ export default function NewTicket() {
     createTicket.mutate({ 
       data: {
         ...data,
-        ...installationPayload,
-        trackingType: selectedTrackingType,
-        deviceType: selectedCameraType,
         description: finalDescription || undefined,
+        templateData: (templateFields ?? []).map((field: any) => ({
+          key: normalizeTemplateFieldKey(String(field.key || field.label || "")),
+          label: String(field.label || field.name || field.key || "Field"),
+          value: templateFieldValues[field.key] ?? "",
+        })),
         attachments: ticketAttachments,
         scheduledAt: data.scheduledAt ? new Date(data.scheduledAt).toISOString() : null,
       } as any,
     });
   };
-
-  const visibleTemplateFieldKeys = (selectedTemplateFieldKeys && selectedTemplateFieldKeys.length) ? selectedTemplateFieldKeys : [];
-  const showInstallationPanel = selectedTemplateId !== null && visibleTemplateFieldKeys.length > 0;
 
   return (
     <AppLayout>
@@ -411,12 +348,7 @@ export default function NewTicket() {
                     </div>
                     <Select
                       onValueChange={(value) => {
-                        setSelectedTemplateId(value || null);
-                        // if cleared selection, hide panel and clear installation values
                         if (!value) {
-                          setSelectedTemplateId(null);
-                          setSelectedTemplateFieldKeys(null);
-                          setInstallationValues({});
                           setTemplateFields(null);
                           setTemplateFieldValues({});
                           form.setValue("description", "", { shouldDirty: true });
@@ -425,97 +357,29 @@ export default function NewTicket() {
 
                         const template = templates.find((candidate) => candidate.id.toString() === value) as any;
                         if (template) {
-                          const fields = Array.isArray(template.fields) ? template.fields : [];
-                          if (fields.length) {
-                            const allowed = new Set([
-                              ...installationFields.map((f) => f.key),
-                              "trackingType",
-                              "deviceType",
-                            ]);
+                          const explicitFields = Array.isArray(template.fields) ? template.fields : [];
+                          const sourceFields = explicitFields.length
+                            ? explicitFields
+                            : inferFieldsFromTemplateDescription(template.description || "");
+                          const resolvedFields = sourceFields.map((field: any) => ({
+                            ...field,
+                            key: normalizeTemplateFieldKey(String(field.key || field.label || field.name || "")),
+                            label: String(field.label || field.name || field.key || "Field"),
+                          })).filter((field: any) => field.key);
 
-                            setInstallationValues((prev) => {
-                              const next = { ...prev };
-                              fields.forEach((f: any) => {
-                                const normalizedKey = normalizeTemplateFieldKey(String(f.key || f.label || ""));
-                                if (!allowed.has(normalizedKey)) {
-                                  return;
-                                }
-                                next[normalizedKey] = typeof f.value === "string" ? f.value : typeof f.defaultValue === "string" ? f.defaultValue : "";
-                              });
-                              return next;
-                            });
-
-                            const normalizedKeys = Array.from(new Set(
-                              fields
-                                .map((f: any) => normalizeTemplateFieldKey(String(f.key || f.label || "")))
-                                .filter((key: string) => allowed.has(key))
-                            )) as string[];
-
-                            // If any template in the system contains VESA or HOURS, map them onto this template
-                            const globalHasVesa = Array.isArray(templates) && templates.some((t:any) => templateHasVesa(t));
-                            if (globalHasVesa && !normalizedKeys.includes('vesaNum')) {
-                              normalizedKeys.push('vesaNum');
-                              setInstallationValues((prev) => ({ ...prev, vesaNum: prev.vesaNum ?? '' }));
-                            }
-                            const globalHasHours = Array.isArray(templates) && templates.some((t:any) => templateHasHours(t));
-                            if (globalHasHours && !normalizedKeys.includes('hours')) {
-                              normalizedKeys.push('hours');
-                              setInstallationValues((prev) => ({ ...prev, hours: prev.hours ?? '' }));
-                            }
-
-                            setSelectedTemplateFieldKeys(normalizedKeys);
-
+                          if (resolvedFields.length) {
+                            setTemplateFields(resolvedFields);
+                            setTemplateFieldValues(Object.fromEntries(resolvedFields.map((field: any) => [
+                              field.key,
+                              typeof field.value === "string"
+                                ? field.value
+                                : typeof field.defaultValue === "string" ? field.defaultValue : "",
+                            ])));
+                            form.setValue("description", "", { shouldDirty: true });
+                          } else {
                             setTemplateFields(null);
                             setTemplateFieldValues({});
-                          } else {
-                            // If the template does not include an explicit fields array, try
-                            // to infer installation fields from the free-form description
-                            // (lines like "VESA NUM: 123" or "HOURS: 4"). If any are found,
-                            // surface them in the installation panel; otherwise fall back
-                            // to populating the description only.
-                            const inferred = inferFieldsFromTemplateDescription(template.description || "");
-                            if (inferred.length) {
-                              const allowed = new Set([
-                                ...installationFields.map((f) => f.key),
-                                "trackingType",
-                                "deviceType",
-                              ]);
-
-                              setInstallationValues((prev) => {
-                                const next = { ...prev };
-                                inferred.forEach((f) => {
-                                  const normalized = normalizeTemplateFieldKey(String(f.key || f.label || ""));
-                                  if (allowed.has(normalized)) {
-                                    next[normalized] = f.value ?? "";
-                                  }
-                                });
-                                return next;
-                              });
-
-                              const normalizedKeys = Array.from(new Set(inferred.map((f) => normalizeTemplateFieldKey(String(f.key || f.label || ""))).filter((k) => k && ([...installationFields.map(x=>x.key), 'trackingType','deviceType'].includes(k)))) ) as string[];
-
-                              // If any template in the system contains VESA or HOURS, map them onto this template
-                              const globalHasVesa = Array.isArray(templates) && templates.some((t:any) => templateHasVesa(t));
-                              if (globalHasVesa && !normalizedKeys.includes('vesaNum')) {
-                                normalizedKeys.push('vesaNum');
-                                setInstallationValues((prev) => ({ ...prev, vesaNum: prev.vesaNum ?? '' }));
-                              }
-                              const globalHasHours = Array.isArray(templates) && templates.some((t:any) => templateHasHours(t));
-                              if (globalHasHours && !normalizedKeys.includes('hours')) {
-                                normalizedKeys.push('hours');
-                                setInstallationValues((prev) => ({ ...prev, hours: prev.hours ?? '' }));
-                              }
-
-                              setSelectedTemplateFieldKeys(normalizedKeys);
-
-                              setTemplateFields(null);
-                              setTemplateFieldValues({});
-                            } else {
-                              setTemplateFields(null);
-                              setTemplateFieldValues({});
-                              setSelectedTemplateFieldKeys(null);
-                              form.setValue("description", template.description, { shouldDirty: true });
-                            }
+                            form.setValue("description", template.description, { shouldDirty: true });
                           }
                         }
                       }}
@@ -531,7 +395,7 @@ export default function NewTicket() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">Selecting a template only fills the Description field; you can edit it before creating the ticket.</p>
+                    <p className="text-xs text-muted-foreground">Every field from the selected template is captured on the ticket and included in its description.</p>
 
 
                   </div>
@@ -542,7 +406,7 @@ export default function NewTicket() {
                     {templateFields.map((f: any) => (
                       <div key={f.key} className="grid grid-cols-1 gap-2">
                         <label className="text-sm font-medium">{f.label}{f.required ? ' *' : ''}</label>
-                        {f.key === "channel" ? (
+                        {/^channel[1-8]$/.test(f.key) || f.key === "channel" ? (
                           <Select value={templateFieldValues[f.key] ?? ""} onValueChange={(value) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: value }))}>
                             <SelectTrigger><SelectValue placeholder="Select channel" /></SelectTrigger>
                             <SelectContent>
@@ -551,12 +415,29 @@ export default function NewTicket() {
                               ))}
                             </SelectContent>
                           </Select>
+                        ) : f.key === "trackingType" || f.key === "deviceType" ? (
+                          <Select
+                            value={templateFieldValues[f.key] ?? "none"}
+                            onValueChange={(value) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: value === "none" ? "" : value }))}
+                          >
+                            <SelectTrigger><SelectValue placeholder={f.label} /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No device selected</SelectItem>
+                              {(f.key === "trackingType" ? trackingDeviceTypes : cameraDeviceTypes).map((deviceType) => (
+                                <SelectItem key={deviceType.id} value={deviceType.name}>{deviceType.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : (
-                          <Input value={templateFieldValues[f.key] ?? ''} onChange={(e) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: (e.target as HTMLInputElement).value }))} />
+                          <Input
+                            type={f.type === "number" ? "number" : f.type === "phone" ? "tel" : "text"}
+                            value={templateFieldValues[f.key] ?? ''}
+                            onChange={(e) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                          />
                         )}
                       </div>
                     ))}
-                    <p className="text-xs text-muted-foreground">These fields come from the selected template and will be combined into the description on submit.</p>
+                    <p className="text-xs text-muted-foreground">These fields are saved separately on the ticket and included in its description.</p>
                   </div>
                 ) : null}
 
@@ -608,80 +489,6 @@ export default function NewTicket() {
                     </FormItem>
                   )}
                 />
-
-                {showInstallationPanel ? (
-                  <div className="space-y-4 rounded-lg border bg-slate-50/80 p-4 dark:bg-slate-950/30">
-                   <div className="flex items-center justify-between gap-3">
-                     <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Template installation details</h3>
-                   </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                     {installationFields.filter((field) => visibleTemplateFieldKeys.includes(field.key)).map((field) => (
-                       <div key={field.key} className="space-y-2">
-                         <label className="text-sm font-medium">{field.label}</label>
-                         {field.key === "channel" ? (
-                           <Select
-                             value={installationValues.channel ?? ""}
-                             onValueChange={(value) => setInstallationValues((prev) => ({ ...prev, channel: value }))}
-                           >
-                             <SelectTrigger><SelectValue placeholder="Select channel" /></SelectTrigger>
-                             <SelectContent>
-                               {Array.from({ length: 8 }, (_, index) => `Channel ${index + 1}`).map((option) => (
-                                 <SelectItem key={option} value={option}>{option}</SelectItem>
-                               ))}
-                             </SelectContent>
-                           </Select>
-                         ) : (
-                           <Input
-                             value={installationValues[field.key] ?? ""}
-                             onChange={(event) => setInstallationValues((prev) => ({ ...prev, [field.key]: event.target.value }))}
-                             placeholder={field.label}
-                           />
-                         )}
-                       </div>
-                     ))}
-
-                     {visibleTemplateFieldKeys.includes('trackingType') ? (
-                       <div className="space-y-2">
-                         <label className="text-sm font-medium">Tracking Device Type</label>
-                         <Select
-                           value={installationValues.trackingType ?? "none"}
-                           onValueChange={(val) => setInstallationValues((prev) => ({ ...prev, trackingType: val === "none" ? "" : val }))}
-                         >
-                           <SelectTrigger>
-                             <SelectValue placeholder="Select tracking device" />
-                           </SelectTrigger>
-                           <SelectContent>
-                             <SelectItem value="none">No tracking device selected</SelectItem>
-                             {trackingDeviceTypes.map((type) => (
-                               <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
-                             ))}
-                           </SelectContent>
-                         </Select>
-                       </div>
-                     ) : null}
-
-                     {visibleTemplateFieldKeys.includes('deviceType') ? (
-                       <div className="space-y-2">
-                         <label className="text-sm font-medium">Camera Device Type</label>
-                         <Select
-                           value={installationValues.deviceType ?? "none"}
-                           onValueChange={(val) => setInstallationValues((prev) => ({ ...prev, deviceType: val === "none" ? "" : val }))}
-                         >
-                           <SelectTrigger>
-                             <SelectValue placeholder="Select camera device" />
-                           </SelectTrigger>
-                           <SelectContent>
-                             <SelectItem value="none">No camera device selected</SelectItem>
-                             {cameraDeviceTypes.map((type) => (
-                               <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
-                             ))}
-                           </SelectContent>
-                         </Select>
-                       </div>
-                     ) : null}
-                   </div>
-                  </div>
-                ) : null}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField

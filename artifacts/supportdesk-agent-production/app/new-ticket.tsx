@@ -8,7 +8,7 @@ import {
   useListOrganizations,
 } from '@workspace/api-client-react';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -27,6 +27,9 @@ import { useColors } from '@/hooks/useColors';
 import { useListAgents, useListTicketTemplates } from '@workspace/api-client-react';
 import { formatAttachmentSize, pickTicketFiles, uploadTicketFile } from '@/components/ticketAttachments';
 import type { TicketAttachment } from '@workspace/api-client-react';
+import { fetchWithFallback } from '@/lib/api';
+
+type DeviceTypeOption = { id: number; name: string };
 
 const PRIORITIES: TicketInput['priority'][] = ['low', 'normal', 'high', 'urgent'];
 const TYPES: TicketInput['type'][] = ['question', 'incident', 'problem', 'task'];
@@ -48,6 +51,14 @@ const normalizeTemplateFieldKey = (label: string) => {
     hrs: 'hrs',
     'vehicle type': 'vehicleType',
     'installation hours': 'hrs',
+    'channel 1': 'channel1',
+    'channel 2': 'channel2',
+    'channel 3': 'channel3',
+    'channel 4': 'channel4',
+    'channel 5': 'channel5',
+    'channel 6': 'channel6',
+    'channel 7': 'channel7',
+    'channel 8': 'channel8',
   };
 
   const normalized = cleaned.replace(/\s+/g, ' ');
@@ -59,7 +70,7 @@ const inferTemplateFields = (template: any) => {
   if (explicitFields.length) {
     return explicitFields.map((field: any) => ({
       ...field,
-      key: field.key || normalizeTemplateFieldKey(field.label || field.name || ''),
+      key: normalizeTemplateFieldKey(field.label || field.name || field.key || ''),
       label: field.label || field.name || 'Field',
     }));
   }
@@ -80,8 +91,7 @@ const inferTemplateFields = (template: any) => {
     if (!canonicalKey || seen.has(canonicalKey)) continue;
 
     const value = keyValueMatch ? keyValueMatch[2].trim() : '';
-    const isMeaningful = label.length > 0 && (value.length > 0 || /reg|vesa|hrs|hours|address|phone|serial|model|account/i.test(label));
-    if (!isMeaningful) continue;
+    if (!label) continue;
 
     seen.add(canonicalKey);
     fields.push({ key: canonicalKey, label, required: false });
@@ -121,7 +131,34 @@ export default function NewTicketScreen() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [templateFields, setTemplateFields] = useState<any[] | null>(null);
   const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
+  const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
+  const [cameraDeviceTypes, setCameraDeviceTypes] = useState<DeviceTypeOption[]>([]);
+  const [deviceTypeError, setDeviceTypeError] = useState('');
+  const [openTemplateDropdown, setOpenTemplateDropdown] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    const loadDeviceTypes = async () => {
+      try {
+        const [trackingResponse, cameraResponse] = await Promise.all([
+          fetchWithFallback('/api/device-types?category=tracking', { headers: { Accept: 'application/json' } }),
+          fetchWithFallback('/api/device-types?category=camera', { headers: { Accept: 'application/json' } }),
+        ]);
+        if (!trackingResponse.ok || !cameraResponse.ok) throw new Error('Device types could not be loaded.');
+        const [trackingData, cameraData] = await Promise.all([trackingResponse.json(), cameraResponse.json()]);
+        if (active) {
+          setTrackingDeviceTypes(Array.isArray(trackingData) ? trackingData : []);
+          setCameraDeviceTypes(Array.isArray(cameraData) ? cameraData : []);
+          setDeviceTypeError('');
+        }
+      } catch (loadError) {
+        if (active) setDeviceTypeError(loadError instanceof Error ? loadError.message : 'Device types could not be loaded.');
+      }
+    };
+    void loadDeviceTypes();
+    return () => { active = false; };
+  }, []);
 
   const agentsQuery = useListAgents({
     query: {
@@ -402,7 +439,10 @@ export default function NewTicketScreen() {
                   setSelectedTemplateId(template.id);
                   if (resolvedFields.length) {
                     setTemplateFields(resolvedFields);
-                    const vals: Record<string, string> = Object.fromEntries(resolvedFields.map((field: any) => [field.key, '']));
+                    const vals: Record<string, string> = Object.fromEntries(resolvedFields.map((field: any) => [
+                      field.key,
+                      typeof field.value === 'string' ? field.value : typeof field.defaultValue === 'string' ? field.defaultValue : '',
+                    ]));
                     setTemplateFieldValues(vals);
                     setDescription('');
                   } else {
@@ -443,7 +483,7 @@ export default function NewTicketScreen() {
           </Pressable>
         ) : null}
         <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
-          Selecting a template fills the description, which you can still edit.
+          Selecting a template shows every template field. The values are saved with the ticket and included in its description.
         </Text>
 
         <Text style={[styles.label, { color: colors.foreground }]}>Description</Text>
@@ -453,15 +493,75 @@ export default function NewTicketScreen() {
             {templateFields.map((f) => (
               <View key={f.key} style={{ marginBottom: 10 }}>
                 <Text style={[styles.label, { color: colors.foreground }]}>{f.label}{f.required ? ' *' : ''}</Text>
-                <TextInput
-                  value={templateFieldValues[f.key] ?? ''}
-                  onChangeText={(text) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: text }))}
-                  placeholder={f.label}
-                  placeholderTextColor={colors.mutedForeground}
-                  style={[styles.input, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
-                />
+                {/^(channel[1-8]|channel|trackingType|deviceType)$/.test(f.key) ? (() => {
+                  const isChannel = /^channel[1-8]$/.test(f.key) || f.key === 'channel';
+                  const options = isChannel
+                    ? Array.from({ length: 8 }, (_, index) => ({ id: index + 1, name: `Channel ${index + 1}` }))
+                    : f.key === 'trackingType' ? trackingDeviceTypes : cameraDeviceTypes;
+                  const selectedValue = templateFieldValues[f.key] ?? '';
+                  const dropdownOpen = openTemplateDropdown === f.key;
+                  return (
+                    <>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Select ${f.label}`}
+                        accessibilityState={{ expanded: dropdownOpen }}
+                        onPress={() => setOpenTemplateDropdown(dropdownOpen ? null : f.key)}
+                        style={[styles.selectTrigger, { backgroundColor: colors.background, borderColor: colors.input }]}
+                      >
+                        <Text style={[styles.selectTriggerText, { color: selectedValue ? colors.foreground : colors.mutedForeground }]}>
+                          {selectedValue || (isChannel ? 'Select channel' : `Select ${f.key === 'trackingType' ? 'tracking' : 'camera'} device type`)}
+                        </Text>
+                        <Feather name={dropdownOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+                      </Pressable>
+                      {dropdownOpen ? (
+                        <View style={[styles.dropdown, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                          <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                            {!isChannel ? (
+                              <Pressable
+                                onPress={() => {
+                                  setTemplateFieldValues((prev) => ({ ...prev, [f.key]: '' }));
+                                  setOpenTemplateDropdown(null);
+                                }}
+                                style={[styles.dropdownOption, { borderColor: colors.border }]}
+                              >
+                                <Text style={[styles.dropdownOptionText, { color: colors.mutedForeground }]}>No device selected</Text>
+                              </Pressable>
+                            ) : null}
+                            {options.map((option) => (
+                              <Pressable
+                                key={option.id}
+                                onPress={() => {
+                                  setTemplateFieldValues((prev) => ({ ...prev, [f.key]: option.name }));
+                                  setOpenTemplateDropdown(null);
+                                }}
+                                style={[styles.dropdownOption, { borderColor: colors.border }]}
+                              >
+                                <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{option.name}</Text>
+                              </Pressable>
+                            ))}
+                            {!isChannel && !options.length ? (
+                              <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>
+                                {deviceTypeError || 'No device types available.'}
+                              </Text>
+                            ) : null}
+                          </ScrollView>
+                        </View>
+                      ) : null}
+                    </>
+                  );
+                })() : (
+                  <TextInput
+                    value={templateFieldValues[f.key] ?? ''}
+                    onChangeText={(text) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: text }))}
+                    placeholder={f.label}
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
+                  />
+                )}
               </View>
             ))}
+            {deviceTypeError ? <Text style={styles.error}>{deviceTypeError}</Text> : null}
             <Text style={[styles.helperText, { color: colors.mutedForeground, marginTop: -6 }]}>These fields come from the selected template. They will be combined into the description on submit.</Text>
           </View>
         ) : null}
@@ -595,6 +695,11 @@ export default function NewTicketScreen() {
                 assigneeId,
                 attachments,
                 scheduledAt: scheduledDate?.toISOString() ?? null,
+                templateData: (templateFields ?? []).map((field) => ({
+                  key: normalizeTemplateFieldKey(field.key || field.label),
+                  label: String(field.label || field.name || field.key || 'Field'),
+                  value: templateFieldValues[field.key] ?? '',
+                })),
               },
             });
           }}

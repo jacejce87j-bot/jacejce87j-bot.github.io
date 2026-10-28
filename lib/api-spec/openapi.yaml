@@ -914,6 +914,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TicketAttachment"
+        templateData:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTemplateValue"
         client:
           type: ["string", "null"]
         fleetNum:
@@ -1002,6 +1006,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TicketAttachment"
+        templateData:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTemplateValue"
         client:
           type: ["string", "null"]
         fleetNum:
@@ -1071,6 +1079,10 @@ components:
           type: ["string", "null"]
         scheduledAt:
           type: ["string", "null"]
+        templateData:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTemplateValue"
         satisfaction:
           type: ["string", "null"]
         attachments:
@@ -1095,6 +1107,17 @@ components:
         objectPath:
           type: string
         uploadedAt:
+          type: string
+
+    TicketTemplateValue:
+      type: object
+      required: [key, label, value]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        value:
           type: string
 
     TicketTemplate:

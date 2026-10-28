@@ -24,11 +24,16 @@ const fieldAliases: Record<string, string> = {
   "registration": "reg",
   "vin": "vin",
   "vehicle id": "deviceId",
+  "camera id": "deviceId",
+  "camera_id": "deviceId",
   "device id": "deviceId",
   "deviceid": "deviceId",
   "devicecellno": "deviceCellNo",
   "device cell no": "deviceCellNo",
   "device cell": "deviceCellNo",
+  "camera cell no": "deviceCellNo",
+  "camera cell number": "deviceCellNo",
+  "camera iccid": "cameraIccid",
   "engine": "engine",
   "make": "make",
   "model": "model",
@@ -42,6 +47,7 @@ const fieldAliases: Record<string, string> = {
   "tracking type": "trackingType",
   "tracking imei": "trackingImei",
   "trackingimei": "trackingImei",
+  "tracking iccid": "trackingIccid",
   "tracking cell num": "trackingCellNum",
   "trackingcellnum": "trackingCellNum",
   "tracking cell number": "trackingCellNum",
@@ -53,28 +59,22 @@ const fieldAliases: Record<string, string> = {
   "hours": "hours",
   "hrs": "hours",
   "channel": "channel",
-  "channel 1": "channel",
-  "channel 2": "channel",
-  "channel 3": "channel",
-  "channel 4": "channel",
-  "channel 5": "channel",
-  "channel 6": "channel",
-  "channel 7": "channel",
-  "channel 8": "channel",
-  "channel1": "channel",
-  "channel2": "channel",
-  "channel3": "channel",
-  "channel4": "channel",
-  "channel5": "channel",
-  "channel6": "channel",
-  "channel7": "channel",
-  "channel8": "channel",
-};
-
-const channelTemplateField = {
-  key: "channel",
-  label: "Channel",
-  type: "text" as const,
+  "channel 1": "channel1",
+  "channel 2": "channel2",
+  "channel 3": "channel3",
+  "channel 4": "channel4",
+  "channel 5": "channel5",
+  "channel 6": "channel6",
+  "channel 7": "channel7",
+  "channel 8": "channel8",
+  "channel1": "channel1",
+  "channel2": "channel2",
+  "channel3": "channel3",
+  "channel4": "channel4",
+  "channel5": "channel5",
+  "channel6": "channel6",
+  "channel7": "channel7",
+  "channel8": "channel8",
 };
 
 function normalizeTemplateFieldKey(value: string): string {
@@ -112,31 +112,6 @@ function inferFieldsFromTemplateDescription(description: string): Array<{key: st
     const key = normalizeTemplateFieldKey(label);
     if (!key) continue;
 
-    const allowed = new Set([
-      "client",
-      "fleetNum",
-      "reg",
-      "vin",
-      "engine",
-      "make",
-      "model",
-      "colour",
-      "odo",
-      "deviceId",
-      "deviceCellNo",
-      "deviceType",
-      "trackingImei",
-      "trackingCellNum",
-      "trackingType",
-      "vesaNum",
-      "hours",
-      "channel",
-    ]);
-
-    if (!allowed.has(key)) {
-      continue;
-    }
-
     const value = match[2].trim();
     generated.push({ key, label, value: value || undefined });
   }
@@ -159,13 +134,18 @@ function withChannelTemplateFields(fields: unknown, description = ""): TemplateF
       value?: unknown;
       type?: unknown;
     };
-    const key = normalizeTemplateFieldKey(String(candidate.key ?? candidate.label ?? ""));
-    if (!key || key === "channel" || seen.has(key)) continue;
+    const label = String(candidate.label ?? "");
+    const normalizedKey = normalizeTemplateFieldKey(String(candidate.key ?? label));
+    const normalizedLabel = normalizeTemplateFieldKey(label);
+    const key = normalizedKey === "channel" && /^channel[1-8]$/.test(normalizedLabel)
+      ? normalizedLabel
+      : normalizedKey;
+    if (!key || (key === "channel" && label.trim().toLowerCase() === "channel") || seen.has(key)) continue;
 
     seen.add(key);
     const normalizedField: TemplateField = {
       key,
-      label: String(candidate.label ?? key),
+      label: label || key,
     };
     if (candidate.required === true) normalizedField.required = true;
     if (candidate.value !== undefined) normalizedField.value = String(candidate.value);
@@ -175,7 +155,7 @@ function withChannelTemplateFields(fields: unknown, description = ""): TemplateF
     merged.push(normalizedField);
   }
 
-  return [...merged, channelTemplateField];
+  return merged;
 }
 
 function normalizeRole(value: unknown) {

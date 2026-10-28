@@ -57,6 +57,60 @@ function descriptionField(description: string | null | undefined, labels: string
   return match?.[1]?.trim() || null;
 }
 
+const templateTicketFieldByKey: Record<string, string> = {
+  client: "client",
+  fleetnum: "fleetNum",
+  reg: "reg",
+  vin: "vin",
+  engine: "engine",
+  make: "make",
+  model: "model",
+  colour: "colour",
+  color: "colour",
+  odo: "odo",
+  odometer: "odo",
+  deviceid: "deviceId",
+  cameraid: "deviceId",
+  devicecellno: "deviceCellNo",
+  cameracellno: "deviceCellNo",
+  devicetype: "deviceType",
+  cameratype: "deviceType",
+  trackingimei: "trackingImei",
+  trackingcellnum: "trackingCellNum",
+  trackingtype: "trackingType",
+  vesanum: "vesaNum",
+  hours: "hours",
+  hrs: "hours",
+};
+
+function mapTemplateDataToTicketFields(templateData?: Array<{ key: string; label: string; value: string }>) {
+  const mapped: Record<string, string | null> = {
+    client: null,
+    fleetNum: null,
+    reg: null,
+    vin: null,
+    engine: null,
+    make: null,
+    model: null,
+    colour: null,
+    odo: null,
+    deviceId: null,
+    deviceCellNo: null,
+    deviceType: null,
+    trackingImei: null,
+    trackingCellNum: null,
+    trackingType: null,
+    vesaNum: null,
+    hours: null,
+  };
+  for (const field of templateData ?? []) {
+    const key = String(field.key || field.label).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const ticketField = templateTicketFieldByKey[key];
+    if (ticketField) mapped[ticketField] = field.value;
+  }
+  return mapped;
+}
+
 async function resolvePolicyDueAt(priority: string, explicitDueAt?: string | null) {
   if (explicitDueAt) return new Date(explicitDueAt);
 
@@ -184,6 +238,7 @@ export function serializeTicket(
     satisfaction: row.satisfaction,
     mergedIntoId: row.mergedIntoId ?? null,
     attachments: row.attachments ?? [],
+    templateData: row.templateData ?? [],
     client: row.client ?? null,
     fleetNum: row.fleetNum ?? descriptionField(row.description, ["fleet num", "fleet no", "fleet number"]),
     reg: row.reg ?? descriptionField(row.description, ["reg", "registration", "number plate"]),
@@ -497,6 +552,7 @@ router.post("/", async (req, res) => {
       ? ruleEvaluation.assigneeId
       : resolvedAssigneeId;
     const insertPayload = {
+      ...mapTemplateDataToTicketFields(body.templateData),
       ...body,
       description: ruleEvaluation.description,
       tags: ruleEvaluation.tags,
@@ -596,7 +652,10 @@ router.patch("/:id", async (req, res) => {
   const [existing] = await db.select().from(ticketsTable).where(eq(ticketsTable.id, id));
   if (!existing) return res.status(404).json({ error: "Ticket not found" });
 
-  const updates: Record<string, any> = { ...body };
+  const updates: Record<string, any> = {
+    ...(body.templateData === undefined ? {} : mapTemplateDataToTicketFields(body.templateData)),
+    ...body,
+  };
   if (body.dueAt !== undefined) {
     updates.dueAt = body.dueAt ? new Date(body.dueAt) : null;
   }

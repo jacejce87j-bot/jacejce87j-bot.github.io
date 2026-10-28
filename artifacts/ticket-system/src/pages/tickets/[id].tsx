@@ -927,9 +927,14 @@ export default function TicketDetail() {
             </div>
 
             <div className="space-y-3 pt-4 border-t border-border">
-              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Template installation details</h3>
+              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Template details</h3>
               <div className="space-y-2">
-                {[
+                {ticket.templateData?.length ? ticket.templateData.map((field) => (
+                  <div key={field.key} className="grid grid-cols-2 gap-2 text-sm">
+                    <span className="text-muted-foreground">{field.label}</span>
+                    <span className="font-medium break-words">{field.value || "—"}</span>
+                  </div>
+                )) : [
                   ["Fleet Num", ticket.fleetNum],
                   ["Reg", ticket.reg],
                   ["VIN", ticket.vin],

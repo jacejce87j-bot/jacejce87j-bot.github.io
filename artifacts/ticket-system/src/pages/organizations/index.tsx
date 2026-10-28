@@ -1,14 +1,21 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout";
-import { useListOrganizations, getListOrganizationsQueryKey, useCreateOrganization, useDeleteOrganization } from "@workspace/api-client-react";
+import {
+  useListOrganizations,
+  getListOrganizationsQueryKey,
+  useCreateOrganization,
+  useDeleteOrganization,
+  useUpdateOrganization,
+  type Organization,
+} from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getInitials } from "@/lib/utils";
-import { Search, Plus, Building2, Trash2 } from "lucide-react";
+import { Search, Plus, Building2, Trash2, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -19,6 +26,7 @@ export default function OrganizationList() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [editingOrganization, setEditingOrganization] = useState<Organization | null>(null);
   const [form, setForm] = useState({ name: "", domain: "", industry: "", plan: "", address: "", notes: "" });
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -42,6 +50,63 @@ export default function OrganizationList() {
       onError: () => toast({ title: "Delete failed", description: "Could not delete the organization.", variant: "destructive" }),
     },
   });
+  const updateOrganization = useUpdateOrganization({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+        setOpen(false);
+        setEditingOrganization(null);
+        toast({ title: "Organization updated" });
+      },
+      onError: () => toast({ title: "Could not update organization", description: "Check the fields and try again.", variant: "destructive" }),
+    },
+  });
+
+  const openCreateDialog = () => {
+    setEditingOrganization(null);
+    setForm({ name: "", domain: "", industry: "", plan: "", address: "", notes: "" });
+    setOpen(true);
+  };
+
+  const openEditDialog = (organization: Organization) => {
+    setEditingOrganization(organization);
+    setForm({
+      name: organization.name,
+      domain: organization.domain ?? "",
+      industry: organization.industry ?? "",
+      plan: organization.plan ?? "",
+      address: organization.address ?? "",
+      notes: organization.notes ?? "",
+    });
+    setOpen(true);
+  };
+
+  const saveOrganization = () => {
+    if (!form.name.trim()) return;
+    const data = {
+      name: form.name.trim(),
+      domain: form.domain.trim() || null,
+      industry: form.industry.trim() || null,
+      plan: form.plan.trim() || null,
+      address: form.address.trim() || null,
+      notes: form.notes.trim() || null,
+    };
+
+    if (editingOrganization) {
+      updateOrganization.mutate({ id: editingOrganization.id, data });
+    } else {
+      createOrganization.mutate({
+        data: {
+          ...data,
+          domain: data.domain ?? undefined,
+          industry: data.industry ?? undefined,
+          plan: data.plan ?? undefined,
+          address: data.address ?? undefined,
+          notes: data.notes ?? undefined,
+        },
+      });
+    }
+  };
    
   const { data, isLoading } = useListOrganizations({ 
     page, 
@@ -61,7 +126,7 @@ export default function OrganizationList() {
             <h2 className="text-3xl font-bold tracking-tight">Organizations</h2>
             <p className="text-muted-foreground">Manage companies and business accounts.</p>
           </div>
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={openCreateDialog}>
             <Plus className="mr-2 h-4 w-4" /> Add Organization
           </Button>
         </div>
@@ -141,14 +206,19 @@ export default function OrganizationList() {
                         {org.ticketCount || 0}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteOrganization.mutate({ id: org.id })}
-                          disabled={deleteOrganization.isPending}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditDialog(org)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => deleteOrganization.mutate({ id: org.id })}
+                            disabled={deleteOrganization.isPending}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -182,11 +252,16 @@ export default function OrganizationList() {
           )}
         </Card>
       </div>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) setEditingOrganization(null);
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add organization</DialogTitle>
-            <DialogDescription>Create a company or business account.</DialogDescription>
+            <DialogTitle>{editingOrganization ? "Edit organization" : "Add organization"}</DialogTitle>
+            <DialogDescription>
+              {editingOrganization ? "Update organization details and the service address shown on job cards." : "Create a company or business account."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2"><Label htmlFor="org-name">Name *</Label><Input id="org-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Acme Inc." /></div>
@@ -198,7 +273,14 @@ export default function OrganizationList() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={createOrganization.isPending || !form.name.trim()} onClick={() => createOrganization.mutate({ data: { name: form.name.trim(), domain: form.domain.trim() || undefined, industry: form.industry.trim() || undefined, plan: form.plan.trim() || undefined, address: form.address.trim() || undefined, notes: form.notes.trim() || undefined } })}>{createOrganization.isPending ? "Adding..." : "Add organization"}</Button>
+            <Button
+              disabled={createOrganization.isPending || updateOrganization.isPending || !form.name.trim()}
+              onClick={saveOrganization}
+            >
+              {createOrganization.isPending || updateOrganization.isPending
+                ? "Saving..."
+                : editingOrganization ? "Save changes" : "Add organization"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

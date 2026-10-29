@@ -67,6 +67,17 @@ const isChannelTemplateField = (field: any) =>
   /^channel(?:[1-8])?$/.test(String(field.key ?? '').toLowerCase().replace(/[^a-z0-9]/g, ''))
   || /^channel\s*[1-8]$/i.test(String(field.label ?? '').trim());
 
+const normalizeEditTemplateDeviceField = (field: any) => {
+  const key = String(field.key || field.label || field.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (['cameratype', 'cameradevicetype', 'devicetype'].includes(key)) {
+    return { ...field, key: 'deviceType' };
+  }
+  if (['trackingtype', 'trackingdevicetype'].includes(key)) {
+    return { ...field, key: 'trackingType' };
+  }
+  return field;
+};
+
 const STATUS_OPTIONS = ['new', 'open', 'pending', 'solved', 'closed'];
 type MobileTicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 type ApiTicketPriority = 'low' | 'normal' | 'high' | 'urgent';
@@ -156,6 +167,8 @@ export default function AgentHomeScreen() {
   const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
   const [cameraDeviceTypes, setCameraDeviceTypes] = useState<DeviceTypeOption[]>([]);
   const [deviceTypeError, setDeviceTypeError] = useState('');
+  const [deviceTypesLoading, setDeviceTypesLoading] = useState(false);
+  const [deviceTypeRetry, setDeviceTypeRetry] = useState(0);
   const [openEditTemplateDropdown, setOpenEditTemplateDropdown] = useState<string | null>(null);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
@@ -169,25 +182,35 @@ export default function AgentHomeScreen() {
   useEffect(() => {
     let active = true;
     const loadDeviceTypes = async () => {
+      setDeviceTypesLoading(true);
+      setDeviceTypeError('');
       try {
+        const token = await getToken();
+        if (!token) throw new Error('Your sign-in has expired. Sign in again to load device types.');
+        const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
         const [trackingResponse, cameraResponse] = await Promise.all([
-          fetchWithFallback('/api/device-types?category=tracking', { headers: { Accept: 'application/json' } }),
-          fetchWithFallback('/api/device-types?category=camera', { headers: { Accept: 'application/json' } }),
+          fetchWithFallback('/api/device-types?category=tracking', { headers }),
+          fetchWithFallback('/api/device-types?category=camera', { headers }),
         ]);
-        if (!trackingResponse.ok || !cameraResponse.ok) throw new Error('Device types could not be loaded.');
+        if (!trackingResponse.ok || !cameraResponse.ok) {
+          const failedResponse = !trackingResponse.ok ? trackingResponse : cameraResponse;
+          const payload = await failedResponse.json().catch(() => null);
+          throw new Error(payload?.error || `Device types could not be loaded (HTTP ${failedResponse.status}).`);
+        }
         const [trackingData, cameraData] = await Promise.all([trackingResponse.json(), cameraResponse.json()]);
         if (active) {
           setTrackingDeviceTypes(Array.isArray(trackingData) ? trackingData : []);
           setCameraDeviceTypes(Array.isArray(cameraData) ? cameraData : []);
-          setDeviceTypeError('');
         }
       } catch (loadError) {
         if (active) setDeviceTypeError(loadError instanceof Error ? loadError.message : 'Device types could not be loaded.');
+      } finally {
+        if (active) setDeviceTypesLoading(false);
       }
     };
     void loadDeviceTypes();
     return () => { active = false; };
-  }, []);
+  }, [deviceTypeRetry]);
 
   const loadStockItems = useCallback(async () => {
     const token = await getToken();
@@ -380,7 +403,7 @@ export default function AgentHomeScreen() {
     if (template.fields && template.fields.length) {
       const templateFields = template.fields.map((field: any) => isChannelTemplateField(field)
         ? { ...field, key: 'channel', label: 'Channel' }
-        : field
+        : normalizeEditTemplateDeviceField(field)
       ).filter((field: any, index: number, fields: any[]) =>
         fields.findIndex((candidate: any) => candidate.key === field.key) === index
       );
@@ -1106,7 +1129,7 @@ export default function AgentHomeScreen() {
                                 ))}
                                 {!isChannel && !options.length ? (
                                   <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>
-                                    {deviceTypeError || 'No device types available.'}
+                                    {deviceTypesLoading ? 'Loading device types…' : deviceTypeError || 'No device types available.'}
                                   </Text>
                                 ) : null}
                               </ScrollView>
@@ -1125,7 +1148,21 @@ export default function AgentHomeScreen() {
                     )}
                   </View>
                 ))}
-                {deviceTypeError ? <Text style={styles.error}>{deviceTypeError}</Text> : null}
+                {deviceTypeError ? (
+                  <View style={styles.deviceTypeErrorRow}>
+                    <Text style={[styles.error, { flex: 1 }]}>{deviceTypeError}</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Retry loading device types"
+                      onPress={() => setDeviceTypeRetry((retry) => retry + 1)}
+                      disabled={deviceTypesLoading}
+                    >
+                      <Text style={[styles.retryText, { color: colors.primary }]}>
+                        {deviceTypesLoading ? 'Loading…' : 'Retry'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -1250,6 +1287,7 @@ const styles = StyleSheet.create({
   dropdownOption: { minHeight: 42, borderBottomWidth: StyleSheet.hairlineWidth, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8 },
   dropdownOptionText: { fontFamily: 'Inter_400Regular', fontSize: 13 },
   dropdownMessage: { padding: 12, fontFamily: 'Inter_400Regular', fontSize: 12 },
+  deviceTypeErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   error: { color: '#D64545', fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 4 },
   horizontalScrollRow: { gap: 8, paddingVertical: 4 },

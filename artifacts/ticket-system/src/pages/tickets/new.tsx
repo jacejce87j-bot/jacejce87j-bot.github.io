@@ -108,6 +108,7 @@ export default function NewTicket() {
       "camera iccid": "cameraIccid",
       "tracking iccid": "trackingIccid",
       "camera type": "deviceType",
+      "cameratype": "deviceType",
       "cell phone": "deviceCellNo",
       "cell no": "deviceCellNo",
       "phone no": "deviceCellNo",

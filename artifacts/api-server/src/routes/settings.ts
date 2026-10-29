@@ -41,6 +41,8 @@ const fieldAliases: Record<string, string> = {
   "color": "colour",
   "odo": "odo",
   "odometer": "odo",
+  "camera type": "deviceType",
+  "cameratype": "deviceType",
   "device type": "deviceType",
   "devicetype": "deviceType",
   "camera device type": "deviceType",

@@ -9,6 +9,7 @@ import {
 } from '@workspace/api-client-react';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   Platform,
@@ -71,6 +72,18 @@ const normalizeTemplateFieldKey = (label: string) => {
 
   const normalized = cleaned.replace(/\s+/g, ' ');
   return aliases[normalized] ?? normalized.replace(/\s+/g, '');
+};
+
+const getTemplateFieldGroup = (field: { key: string; label?: string }) => {
+  const key = String(field.key ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const label = String(field.label ?? '').toLowerCase();
+  const search = `${key} ${label}`;
+  if (/tracking/.test(search)) return 'Tracking';
+  if (
+    /fleet|reg|vin|engine|make|model|colour|color|odo|vesa|vehicle|hours|hrs/.test(search)
+  ) return 'Vehicle';
+  if (/camera|device|channel/.test(search)) return 'Camera';
+  return 'Other details';
 };
 
 const inferTemplateFields = (template: any) => {
@@ -145,31 +158,44 @@ export default function NewTicketScreen() {
   const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
   const [cameraDeviceTypes, setCameraDeviceTypes] = useState<DeviceTypeOption[]>([]);
   const [deviceTypeError, setDeviceTypeError] = useState('');
+  const [deviceTypesLoading, setDeviceTypesLoading] = useState(false);
+  const [deviceTypeRetry, setDeviceTypeRetry] = useState(0);
   const [openTemplateDropdown, setOpenTemplateDropdown] = useState<string | null>(null);
+  const [moreOptionsExpanded, setMoreOptionsExpanded] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     let active = true;
     const loadDeviceTypes = async () => {
+      setDeviceTypesLoading(true);
+      setDeviceTypeError('');
       try {
+        const token = (globalThis as any).__AUTH_TOKEN__ ?? await AsyncStorage.getItem('userToken');
+        if (!token) throw new Error('Your sign-in has expired. Sign in again to load device types.');
+        const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
         const [trackingResponse, cameraResponse] = await Promise.all([
-          fetchWithFallback('/api/device-types?category=tracking', { headers: { Accept: 'application/json' } }),
-          fetchWithFallback('/api/device-types?category=camera', { headers: { Accept: 'application/json' } }),
+          fetchWithFallback('/api/device-types?category=tracking', { headers }),
+          fetchWithFallback('/api/device-types?category=camera', { headers }),
         ]);
-        if (!trackingResponse.ok || !cameraResponse.ok) throw new Error('Device types could not be loaded.');
+        if (!trackingResponse.ok || !cameraResponse.ok) {
+          const failedResponse = !trackingResponse.ok ? trackingResponse : cameraResponse;
+          const payload = await failedResponse.json().catch(() => null);
+          throw new Error(payload?.error || `Device types could not be loaded (HTTP ${failedResponse.status}).`);
+        }
         const [trackingData, cameraData] = await Promise.all([trackingResponse.json(), cameraResponse.json()]);
         if (active) {
           setTrackingDeviceTypes(Array.isArray(trackingData) ? trackingData : []);
           setCameraDeviceTypes(Array.isArray(cameraData) ? cameraData : []);
-          setDeviceTypeError('');
         }
       } catch (loadError) {
         if (active) setDeviceTypeError(loadError instanceof Error ? loadError.message : 'Device types could not be loaded.');
+      } finally {
+        if (active) setDeviceTypesLoading(false);
       }
     };
     void loadDeviceTypes();
     return () => { active = false; };
-  }, []);
+  }, [deviceTypeRetry]);
 
   const agentsQuery = useListAgents({
     query: {
@@ -278,6 +304,8 @@ export default function NewTicketScreen() {
           autoCapitalize="sentences"
         />
 
+        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Job details</Text>
         <Text style={[styles.label, { color: colors.foreground }]}>Requester *</Text>
         <Pressable
           accessibilityRole="button"
@@ -436,10 +464,11 @@ export default function NewTicketScreen() {
           accessibilityLabel="Booking date and time"
         />
         <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Optional. Enter the local appointment date and time.</Text>
+        </View>
 
-        <Text style={[styles.label, { color: colors.foreground }]}>Description template</Text>
+        <Text style={[styles.label, { color: colors.foreground }]}>Installation template</Text>
         {activeTemplates.length ? (
-          <View style={styles.choices}>
+          <View style={styles.templateChoices}>
             {activeTemplates.map((template) => (
               <Pressable
                 key={template.id}
@@ -497,13 +526,19 @@ export default function NewTicketScreen() {
           Selecting a template shows every template field. The values are saved with the ticket and included in its description.
         </Text>
 
-        <Text style={[styles.label, { color: colors.foreground }]}>Description</Text>
+        <Text style={[styles.label, { color: colors.foreground }]}>Job description</Text>
         {templateFields && templateFields.length ? (
           <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>Template details</Text>
-            {templateFields.map((f) => (
-              <View key={f.key} style={{ marginBottom: 10 }}>
-                <Text style={[styles.label, { color: colors.foreground }]}>{f.label}{f.required ? ' *' : ''}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 0 }]}>Installation details</Text>
+            {['Vehicle', 'Camera', 'Tracking', 'Other details'].map((group) => {
+              const fields = templateFields.filter((field) => getTemplateFieldGroup(field) === group);
+              if (!fields.length) return null;
+              return (
+                <View key={group} style={styles.templateSection}>
+                  <Text style={[styles.templateSectionTitle, { color: colors.primary }]}>{group}</Text>
+                  {fields.map((f) => (
+                    <View key={f.key} style={styles.templateField}>
+                <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>{f.label}{f.required ? ' *' : ''}</Text>
                 {/^(channel|trackingType|deviceType)$/.test(f.key) ? (() => {
                   const isChannel = f.key === 'channel';
                   const options = isChannel
@@ -553,7 +588,7 @@ export default function NewTicketScreen() {
                             ))}
                             {!isChannel && !options.length ? (
                               <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>
-                                {deviceTypeError || 'No device types available.'}
+                                {deviceTypesLoading ? 'Loading device types…' : deviceTypeError || 'No device types available.'}
                               </Text>
                             ) : null}
                           </ScrollView>
@@ -571,8 +606,25 @@ export default function NewTicketScreen() {
                   />
                 )}
               </View>
-            ))}
-            {deviceTypeError ? <Text style={styles.error}>{deviceTypeError}</Text> : null}
+                  ))}
+                </View>
+              );
+            })}
+            {deviceTypeError ? (
+              <View style={styles.deviceTypeErrorRow}>
+                <Text style={[styles.error, { flex: 1 }]}>{deviceTypeError}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading device types"
+                  onPress={() => setDeviceTypeRetry((retry) => retry + 1)}
+                  disabled={deviceTypesLoading}
+                >
+                  <Text style={[styles.retryLinkText, { color: colors.primary }]}>
+                    {deviceTypesLoading ? 'Loading…' : 'Retry'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
             <Text style={[styles.helperText, { color: colors.mutedForeground, marginTop: -6 }]}>These fields come from the selected template. They will be combined into the description on submit.</Text>
           </View>
         ) : null}
@@ -586,12 +638,30 @@ export default function NewTicketScreen() {
           textAlignVertical="top"
         />
 
-        <ChoiceGroup label="Priority" values={PRIORITIES} value={priority} onChange={setPriority} colors={colors} />
-        <ChoiceGroup label="Type" values={TYPES} value={type} onChange={setType} colors={colors} />
-        <ChoiceGroup label="Channel" values={CHANNELS} value={channel} onChange={setChannel} colors={colors} />
+        <View style={[styles.moreOptionsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={moreOptionsExpanded ? 'Hide more ticket options' : 'Show more ticket options'}
+            accessibilityState={{ expanded: moreOptionsExpanded }}
+            onPress={() => setMoreOptionsExpanded((expanded) => !expanded)}
+            style={styles.moreOptionsHeader}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 0 }]}>More options</Text>
+              <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
+                {priority} · {type} · {assigneeId === null ? 'Unassigned' : agents.find((agent) => agent.id === assigneeId)?.name ?? 'Assigned'}
+              </Text>
+            </View>
+            <Feather name={moreOptionsExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.mutedForeground} />
+          </Pressable>
+          {moreOptionsExpanded ? (
+            <View style={styles.moreOptionsContent}>
+              <ChoiceGroup label="Priority" values={PRIORITIES} value={priority} onChange={setPriority} colors={colors} />
+              <ChoiceGroup label="Type" values={TYPES} value={type} onChange={setType} colors={colors} />
+              <ChoiceGroup label="Ticket channel" values={CHANNELS} value={channel} onChange={setChannel} colors={colors} />
 
-        <Text style={[styles.label, { color: colors.foreground }]}>Assign to agent</Text>
-        <View style={styles.choices}>
+              <Text style={[styles.label, { color: colors.foreground }]}>Assign to agent</Text>
+              <View style={styles.choices}>
           <Pressable
             onPress={() => setAssigneeId(null)}
             style={[
@@ -617,8 +687,8 @@ export default function NewTicketScreen() {
               </Text>
             </Pressable>
           ))}
-        </View>
-        {agentsQuery.isLoading ? (
+              </View>
+              {agentsQuery.isLoading ? (
           <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Loading agents…</Text>
         ) : agentsQuery.isError ? (
           <>
@@ -635,7 +705,9 @@ export default function NewTicketScreen() {
             </Pressable>
           </>
         ) : null}
-
+            </View>
+          ) : null}
+        </View>
         <View style={styles.attachmentHeader}>
           <Text style={[styles.label, styles.attachmentLabel, { color: colors.foreground }]}>Attachments</Text>
           <Pressable
@@ -781,11 +853,21 @@ const styles = StyleSheet.create({
   dropdownOption: { minHeight: 46, borderBottomWidth: StyleSheet.hairlineWidth, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8 },
   dropdownOptionText: { fontFamily: 'Inter_400Regular', fontSize: 14 },
   dropdownMessage: { padding: 12, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  deviceTypeErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   multilineInput: { minHeight: 120, paddingTop: 14 },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   choice: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
   choiceText: { fontFamily: 'Inter_500Medium', fontSize: 12, textTransform: 'capitalize' },
+  sectionCard: { borderWidth: 1, borderRadius: 10, padding: 14, marginTop: 16, marginBottom: 8 },
+  sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 15, marginBottom: 8 },
+  templateChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   templateFieldGroup: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 6 },
+  templateSection: { marginTop: 8 },
+  templateSectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 12, marginBottom: 4 },
+  templateField: { marginBottom: 10 },
+  moreOptionsCard: { borderWidth: 1, borderRadius: 10, padding: 14, marginTop: 18 },
+  moreOptionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  moreOptionsContent: { marginTop: 8 },
   attachmentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   attachmentLabel: { marginBottom: 0 },
   attachButton: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 8 },

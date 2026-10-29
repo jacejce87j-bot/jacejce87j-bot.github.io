@@ -6,6 +6,7 @@ import {
   agentsTable,
   contactsTable,
   organizationsTable,
+  organizationSitesTable,
   commentsTable,
   activityEventsTable,
   fieldAgentStockTable,
@@ -230,6 +231,9 @@ export function serializeTicket(
     requester: serializeContact(contact),
     organizationId: row.organizationId,
     organization: serializeOrg(org),
+    siteId: row.siteId ?? null,
+    siteName: row.siteName ?? null,
+    siteAddress: row.siteAddress ?? null,
     tags: row.tags,
     dueAt: row.dueAt?.toISOString() ?? null,
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
@@ -415,16 +419,20 @@ async function listTickets(req: Request, res: Response) {
     updatedAt: ticketsTable.updatedAt,
     priority: ticketsTable.priority,
     dueAt: ticketsTable.dueAt,
+    scheduledAt: ticketsTable.scheduledAt,
   };
   const sortCol = sortMap[query.sortBy ?? "createdAt"] ?? ticketsTable.createdAt;
   const orderFn = query.sortDir === "asc" ? asc : desc;
+  const scheduledAtOrder = query.sortDir === "desc"
+    ? sql`${ticketsTable.scheduledAt} DESC NULLS LAST`
+    : sql`${ticketsTable.scheduledAt} ASC NULLS LAST`;
 
   const [totalRow] = await db.select({ cnt: count() }).from(ticketsTable).where(where);
   const tickets = await db
     .select()
     .from(ticketsTable)
     .where(where)
-    .orderBy(orderFn(sortCol))
+    .orderBy(query.sortBy === "scheduledAt" ? scheduledAtOrder : orderFn(sortCol))
     .limit(limit)
     .offset(offset);
 
@@ -512,6 +520,22 @@ router.post("/", async (req, res) => {
       ],
     });
   }
+  const organizationSites = await db.select({ id: organizationSitesTable.id })
+    .from(organizationSitesTable)
+    .where(eq(organizationSitesTable.organizationId, body.organizationId));
+  if (organizationSites.length && body.siteId == null) {
+    return res.status(400).json({ error: "Select a site belonging to the selected organization" });
+  }
+  const selectedSite = body.siteId == null
+    ? null
+    : (await db.select().from(organizationSitesTable)
+      .where(and(
+        eq(organizationSitesTable.id, body.siteId),
+        eq(organizationSitesTable.organizationId, body.organizationId),
+      )))[0];
+  if (body.siteId != null && !selectedSite) {
+    return res.status(400).json({ error: "Select a valid site belonging to the selected organization" });
+  }
   const dueAt = await resolvePolicyDueAt(body.priority ?? "standard", body.dueAt ?? null);
 
   const resolvedRequesterId = body.requesterId;
@@ -558,6 +582,9 @@ router.post("/", async (req, res) => {
       tags: ruleEvaluation.tags,
       dueAt,
       scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
+      siteId: selectedSite?.id ?? null,
+      siteName: selectedSite?.name ?? null,
+      siteAddress: selectedSite?.address ?? null,
       requesterId: resolvedRequesterId,
       assigneeId: ruleAssigneeId,
     } as any;
@@ -656,6 +683,26 @@ router.patch("/:id", async (req, res) => {
     ...(body.templateData === undefined ? {} : mapTemplateDataToTicketFields(body.templateData)),
     ...body,
   };
+  if (body.siteId !== undefined || (body.organizationId !== undefined && body.organizationId !== existing.organizationId)) {
+    const organizationId = body.organizationId !== undefined ? body.organizationId : existing.organizationId;
+    if (body.siteId == null) {
+      updates.siteId = null;
+      updates.siteName = null;
+      updates.siteAddress = null;
+    } else {
+      if (organizationId == null) {
+        return res.status(400).json({ error: "A site requires an organization" });
+      }
+      const [site] = await db.select().from(organizationSitesTable).where(and(
+        eq(organizationSitesTable.id, body.siteId),
+        eq(organizationSitesTable.organizationId, organizationId),
+      ));
+      if (!site) return res.status(400).json({ error: "Select a valid site belonging to the selected organization" });
+      updates.siteId = site.id;
+      updates.siteName = site.name;
+      updates.siteAddress = site.address;
+    }
+  }
   if (body.dueAt !== undefined) {
     updates.dueAt = body.dueAt ? new Date(body.dueAt) : null;
   }

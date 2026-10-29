@@ -11,6 +11,15 @@ CREATE TABLE IF NOT EXISTS organizations (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS organization_sites (
+  id SERIAL PRIMARY KEY,
+  organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
 -- Create agents table
 CREATE TABLE IF NOT EXISTS agents (
   id SERIAL PRIMARY KEY,
@@ -49,6 +58,9 @@ CREATE TABLE IF NOT EXISTS tickets (
   assignee_id INTEGER REFERENCES agents(id) ON DELETE SET NULL,
   requester_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
   organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+  site_id INTEGER REFERENCES organization_sites(id) ON DELETE SET NULL,
+  site_name TEXT,
+  site_address TEXT,
   tags TEXT[] NOT NULL DEFAULT '{}',
   due_at TIMESTAMP WITH TIME ZONE,
   scheduled_at TIMESTAMP WITH TIME ZONE,

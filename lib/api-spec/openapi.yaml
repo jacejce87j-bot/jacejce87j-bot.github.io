@@ -92,7 +92,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [createdAt, updatedAt, priority, dueAt]
+            enum: [createdAt, updatedAt, priority, dueAt, scheduledAt]
         - name: sortDir
           in: query
           schema:
@@ -180,6 +180,98 @@ paths:
         "204":
           description: Deleted
 
+  /organizations/{id}/sites:
+    get:
+      operationId: listOrganizationSites
+      tags: [organizations]
+      summary: List an organization's sites
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Organization sites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrganizationSite"
+    post:
+      operationId: createOrganizationSite
+      tags: [organizations]
+      summary: Create an organization site
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationSiteInput"
+      responses:
+        "201":
+          description: Created organization site
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSite"
+
+  /organizations/{id}/sites/{siteId}:
+    patch:
+      operationId: updateOrganizationSite
+      tags: [organizations]
+      summary: Update an organization site
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationSiteInput"
+      responses:
+        "200":
+          description: Updated organization site
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationSite"
+    delete:
+      operationId: deleteOrganizationSite
+      tags: [organizations]
+      summary: Delete an organization site
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted organization site
+
   /storage/uploads/request-url:
     post:
       operationId: requestUploadUrl
@@ -190,14 +282,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RequestUploadUrlBody"
+              $ref: "#/components/schemas/UploadUrlMetadata"
       responses:
         "200":
           description: Upload URL
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RequestUploadUrlResponse"
+                $ref: "#/components/schemas/UploadUrlGrant"
 
   /tickets/{id}/merge:
     post:
@@ -893,6 +985,12 @@ components:
           type: ["integer", "null"]
         organization:
           $ref: "#/components/schemas/Organization"
+        siteId:
+          type: ["integer", "null"]
+        siteName:
+          type: ["string", "null"]
+        siteAddress:
+          type: ["string", "null"]
         tags:
           type: array
           items:
@@ -994,6 +1092,8 @@ components:
           type: ["integer", "null"]
         organizationId:
           type: ["integer", "null"]
+        siteId:
+          type: ["integer", "null"]
         tags:
           type: array
           items:
@@ -1071,6 +1171,8 @@ components:
           type: ["integer", "null"]
         organizationId:
           type: ["integer", "null"]
+        siteId:
+          type: ["integer", "null"]
         tags:
           type: array
           items:
@@ -1130,6 +1232,10 @@ components:
           type: string
         description:
           type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTemplateField"
         isActive:
           type: boolean
         createdAt:
@@ -1147,6 +1253,10 @@ components:
         description:
           type: string
           minLength: 1
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTemplateField"
         isActive:
           type: boolean
 
@@ -1159,8 +1269,28 @@ components:
         description:
           type: string
           minLength: 1
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketTemplateField"
         isActive:
           type: boolean
+
+    TicketTemplateField:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        required:
+          type: boolean
+        type:
+          type: string
+          enum: [text, number, phone]
+        value:
+          type: string
 
     TicketPage:
       type: object
@@ -1233,6 +1363,34 @@ components:
         notes:
           type: string
 
+    OrganizationSite:
+      type: object
+      required: [id, organizationId, name, address, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        organizationId:
+          type: integer
+        name:
+          type: string
+        address:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    OrganizationSiteInput:
+      type: object
+      required: [name, address]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        address:
+          type: string
+          minLength: 1
+
     SlaPolicy:
       type: object
       required: [id, name, priority, firstResponseMinutes, resolutionMinutes, isActive, createdAt, updatedAt]
@@ -1291,7 +1449,7 @@ components:
         isActive:
           type: boolean
 
-    RequestUploadUrlBody:
+    UploadUrlMetadata:
       type: object
       required: [name, size, contentType]
       properties:
@@ -1302,7 +1460,7 @@ components:
         contentType:
           type: string
 
-    RequestUploadUrlResponse:
+    UploadUrlGrant:
       type: object
       required: [uploadURL, objectPath, metadata]
       properties:
@@ -1311,7 +1469,7 @@ components:
         objectPath:
           type: string
         metadata:
-          $ref: "#/components/schemas/RequestUploadUrlBody"
+          $ref: "#/components/schemas/UploadUrlMetadata"
 
     AuthUser:
       type: object

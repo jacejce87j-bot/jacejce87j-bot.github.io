@@ -35,7 +35,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ArrowLeft, FileText, Paperclip } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { getMentionCandidates, replaceLastMention } from "@/lib/mentions";
 import { MacroSelector } from "@/components/macro-selector";
@@ -51,6 +51,7 @@ const formSchema = z.object({
   requesterId: z.coerce.number().optional().nullable(),
   assigneeId: z.coerce.number().optional().nullable(),
   organizationId: z.coerce.number().optional().nullable(),
+  siteId: z.coerce.number().optional().nullable(),
   scheduledAt: z.string().optional(),
 }).refine((values) => Number.isSafeInteger(values.requesterId) && Number(values.requesterId) > 0, {
   path: ["requesterId"],
@@ -233,10 +234,26 @@ export default function NewTicket() {
       requesterId: null,
       assigneeId: null,
       organizationId: null,
+      siteId: null,
       scheduledAt: "",
     },
   });
 
+  const selectedOrganizationId = form.watch("organizationId");
+  const organizationSitesQuery = useQuery({
+    queryKey: ["organization-sites", selectedOrganizationId],
+    enabled: Number.isSafeInteger(selectedOrganizationId) && Number(selectedOrganizationId) > 0,
+    queryFn: async () => {
+      const response = await fetch(getApiUrl(`/api/organizations/${selectedOrganizationId}/sites`), {
+        headers: getAuthHeaders(),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || `Sites could not be loaded (HTTP ${response.status}).`);
+      if (!Array.isArray(payload)) throw new Error("Sites returned an invalid response.");
+      return payload as Array<{ id: number; organizationId: number; name: string; address: string }>;
+    },
+  });
+  const organizationSites = organizationSitesQuery.data ?? [];
   const descriptionValue = form.watch("description") ?? "";
   const mentionSuggestions = getMentionCandidates(descriptionValue, contacts);
 
@@ -269,6 +286,18 @@ export default function NewTicket() {
   };
 
   const onSubmit = (data: FormValues) => {
+    if (selectedOrganizationId && organizationSitesQuery.isLoading) {
+      toast({ title: "Organization sites are loading", description: "Wait for the available job locations to finish loading.", variant: "destructive" });
+      return;
+    }
+    if (selectedOrganizationId && organizationSitesQuery.isError) {
+      toast({ title: "Could not load organization sites", description: "Retry loading sites before creating this ticket.", variant: "destructive" });
+      return;
+    }
+    if (organizationSites.length && data.siteId == null) {
+      toast({ title: "Select a site or location", description: "Choose the job location for this organization.", variant: "destructive" });
+      return;
+    }
     let finalDescription = data.description || '';
     if (templateFields && templateFields.length) {
       const built = templateFields.map((f: any) => `${f.label}: ${templateFieldValues[f.key] ?? ''}`).join('\n');
@@ -511,7 +540,10 @@ export default function NewTicket() {
                       <FormItem>
                         <FormLabel>Requester *</FormLabel>
                         <Select 
-                          onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} 
+                          onValueChange={(val) => {
+                            field.onChange(val === "none" ? null : parseInt(val, 10));
+                            form.setValue("siteId", null, { shouldDirty: true });
+                          }}
                           value={field.value ? field.value.toString() : "none"}
                         >
                           <FormControl>
@@ -562,15 +594,54 @@ export default function NewTicket() {
                     )}
                   />
 
-                  {(() => {
-                    const selectedOrganization = organizations.find((org) => org.id === form.watch("organizationId"));
-                    return selectedOrganization?.address ? (
+                  {selectedOrganizationId ? (
+                    <div className="md:col-span-2 space-y-2">
+                    {organizationSitesQuery.isLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading organization sites…</p>
+                    ) : organizationSitesQuery.isError ? (
+                      <div className="flex items-center gap-3 text-sm text-destructive">
+                        <span>{organizationSitesQuery.error instanceof Error ? organizationSitesQuery.error.message : "Organization sites could not be loaded."}</span>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void organizationSitesQuery.refetch()}>Retry</Button>
+                      </div>
+                    ) : organizationSites.length ? (
+                      <FormField
+                        control={form.control}
+                        name="siteId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Site / location *</FormLabel>
+                            <Select
+                              value={field.value ? String(field.value) : "none"}
+                              onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}
+                            >
+                              <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Select a site / location" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="none">Select a site / location</SelectItem>
+                                {organizationSites.map((site) => (
+                                  <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
+                    {(() => {
+                    const selectedOrganization = organizations.find((org) => org.id === selectedOrganizationId);
+                    const selectedSite = organizationSites.find((site) => site.id === form.watch("siteId"));
+                    const jobAddress = selectedSite?.address ?? (!organizationSites.length ? selectedOrganization?.address : null);
+                    return jobAddress ? (
                       <div className="md:col-span-2 rounded-md border bg-muted/30 p-3 text-sm">
-                        <div className="font-medium">Job address</div>
-                        <div className="text-muted-foreground">{selectedOrganization.address}</div>
+                        <div className="font-medium">{selectedSite ? `Job location: ${selectedSite.name}` : "Job address"}</div>
+                        <div className="text-muted-foreground">{jobAddress}</div>
                       </div>
                     ) : null;
-                  })()}
+                    })()}
+                    </div>
+                  ) : null}
 
                   <FormField
                     control={form.control}

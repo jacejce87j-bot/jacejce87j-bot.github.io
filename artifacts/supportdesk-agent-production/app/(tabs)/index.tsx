@@ -162,6 +162,7 @@ export default function AgentHomeScreen() {
   const [editScheduledAt, setEditScheduledAt] = useState('');
   const [editAssigneeId, setEditAssigneeId] = useState<number | null>(null);
   const [editTemplateId, setEditTemplateId] = useState<number | null>(null);
+  const [editTemplatePickerOpen, setEditTemplatePickerOpen] = useState(false);
   const [editTemplateFields, setEditTemplateFields] = useState<any[] | null>(null);
   const [editTemplateValues, setEditTemplateValues] = useState<Record<string, string>>({});
   const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
@@ -271,25 +272,30 @@ export default function AgentHomeScreen() {
     },
   });
 
-  const ticketsQueryParams = useMemo(() => ({ limit: 50, sortBy: 'updatedAt' as const, sortDir: 'desc' as const }), []);
+  const firstName = currentUser?.firstName || currentUser?.email?.split('@')[0] || 'Agent';
+  const updateTicket = useUpdateTicket();
+  const agents = useMemo(() => agentsQuery.data ?? [], [agentsQuery.data]);
+
+  const currentAgent = useMemo(() => {
+    return agents.find((a) => a.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+  }, [agents, currentUser]);
+
+  const ticketsQueryParams = useMemo(() => ({
+    limit: 50,
+    sortBy: 'scheduledAt' as const,
+    sortDir: 'asc' as const,
+    ...(currentAgent?.id != null ? { assigneeId: currentAgent.id } : {}),
+  }), [currentAgent?.id]);
 
   const ticketsQuery = useListTickets(
     ticketsQueryParams,
     {
       query: {
         queryKey: getListTicketsQueryKey(ticketsQueryParams),
-        enabled: Boolean(currentUser),
+        enabled: Boolean(currentUser && currentAgent),
       },
     },
   );
-  const firstName = currentUser?.firstName || currentUser?.email?.split('@')[0] || 'Agent';
-  const updateTicket = useUpdateTicket();
-  const agents = useMemo(() => agentsQuery.data ?? [], [agentsQuery.data]);
-  
-
-  const currentAgent = useMemo(() => {
-    return agents.find((a) => a.email?.toLowerCase() === currentUser?.email?.toLowerCase());
-  }, [agents, currentUser]);
 
   const myTickets = useMemo(() => {
     const allTickets = ticketsQuery.data?.data ?? [];
@@ -307,6 +313,13 @@ export default function AgentHomeScreen() {
       if (statusFilter === 'all') return true;
       if (statusFilter === 'active') return activeStatuses.has(ticket.status);
       return ticket.status === statusFilter;
+    }).sort((left, right) => {
+      const leftBookedAt = left.scheduledAt ? Date.parse(left.scheduledAt) : Number.POSITIVE_INFINITY;
+      const rightBookedAt = right.scheduledAt ? Date.parse(right.scheduledAt) : Number.POSITIVE_INFINITY;
+      const leftTime = Number.isFinite(leftBookedAt) ? leftBookedAt : Number.POSITIVE_INFINITY;
+      const rightTime = Number.isFinite(rightBookedAt) ? rightBookedAt : Number.POSITIVE_INFINITY;
+      if (leftTime === rightTime) return 0;
+      return leftTime - rightTime;
     });
   }, [myTickets, statusFilter]);
 
@@ -334,6 +347,7 @@ export default function AgentHomeScreen() {
     setEditScheduledAt(toLocalDateTimeInput(ticket.scheduledAt));
     setEditAssigneeId(ticket.assigneeId ?? null);
     setEditTemplateId(null);
+    setEditTemplatePickerOpen(false);
     setEditTemplateFields(null);
     setEditTemplateValues({});
     setTicketStockUsage([]);
@@ -399,6 +413,7 @@ export default function AgentHomeScreen() {
 
   const applyEditTemplate = (template: any) => {
     setEditTemplateId(template.id);
+    setEditTemplatePickerOpen(false);
 
     if (template.fields && template.fields.length) {
       const templateFields = template.fields.map((field: any) => isChannelTemplateField(field)
@@ -667,10 +682,14 @@ export default function AgentHomeScreen() {
                 <Text style={[styles.ticketMeta, { color: colors.mutedForeground }]}>
                   {ticket.priority} priority · {ticket.type}
                 </Text>
-                {ticket.organization?.address ? (
+                {ticket.siteAddress || ticket.organization?.address ? (
                   <View style={styles.ticketDetailRow}>
-                    <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>Job address</Text>
-                    <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>{ticket.organization.address}</Text>
+                    <Text style={[styles.ticketDetailLabel, { color: colors.mutedForeground }]}>
+                      {ticket.siteName ? `Job location · ${ticket.siteName}` : 'Job address'}
+                    </Text>
+                    <Text style={[styles.ticketDetailValue, { color: colors.foreground }]}>
+                      {ticket.siteAddress ?? ticket.organization?.address}
+                    </Text>
                   </View>
                 ) : null}
                 {ticket.scheduledAt ? (
@@ -849,10 +868,14 @@ export default function AgentHomeScreen() {
             bottomOffset={30}
             keyboardDismissMode="interactive"
           >
-            {editingTicket?.organization?.address ? (
+            {editingTicket?.siteAddress || editingTicket?.organization?.address ? (
               <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.inputLabel, { color: colors.mutedForeground, marginTop: 0 }]}>Job address</Text>
-                <Text style={[styles.cardText, { color: colors.foreground }]}>{editingTicket.organization.address}</Text>
+                <Text style={[styles.inputLabel, { color: colors.mutedForeground, marginTop: 0 }]}>
+                  {editingTicket.siteName ? `Job location · ${editingTicket.siteName}` : 'Job address'}
+                </Text>
+                <Text style={[styles.cardText, { color: colors.foreground }]}>
+                  {editingTicket.siteAddress ?? editingTicket.organization?.address}
+                </Text>
               </View>
             ) : null}
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Booking date and time</Text>
@@ -1058,19 +1081,48 @@ export default function AgentHomeScreen() {
 
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Template</Text>
             {activeTemplates.length ? (
-              <View style={styles.chipRow}>
-                {activeTemplates.map((template) => (
-                  <Pressable
-                    key={template.id}
-                    onPress={() => applyEditTemplate(template)}
-                    style={[styles.chip, { borderColor: colors.border, backgroundColor: editTemplateId === template.id ? colors.primary : colors.card }]}
-                  >
-                    <Text style={[styles.chipText, { color: editTemplateId === template.id ? colors.primaryForeground : colors.foreground }]}>
-                      {template.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={editTemplateId === null ? 'Select ticket template' : `Template: ${activeTemplates.find((template) => template.id === editTemplateId)?.name ?? ''}`}
+                  accessibilityState={{ expanded: editTemplatePickerOpen }}
+                  onPress={() => setEditTemplatePickerOpen((open) => !open)}
+                  style={[styles.selectTrigger, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
+                  <Text style={[styles.selectTriggerText, { color: editTemplateId === null ? colors.mutedForeground : colors.foreground }]}>
+                    {activeTemplates.find((template) => template.id === editTemplateId)?.name ?? 'Select a template'}
+                  </Text>
+                  <Feather name={editTemplatePickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+                </Pressable>
+                {editTemplatePickerOpen ? (
+                  <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setEditTemplateId(null);
+                          setEditTemplateFields(null);
+                          setEditTemplateValues({});
+                          setEditTemplatePickerOpen(false);
+                        }}
+                        style={[styles.dropdownOption, { borderColor: colors.border }]}
+                      >
+                        <Text style={[styles.dropdownOptionText, { color: colors.mutedForeground }]}>No template</Text>
+                      </Pressable>
+                      {activeTemplates.map((template) => (
+                        <Pressable
+                          key={template.id}
+                          accessibilityRole="button"
+                          onPress={() => applyEditTemplate(template)}
+                          style={[styles.dropdownOption, { borderColor: colors.border }]}
+                        >
+                          <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{template.name}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                ) : null}
+              </>
             ) : (
               <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>No active templates available.</Text>
             )}

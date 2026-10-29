@@ -1018,8 +1018,11 @@ export default function TicketDetail() {
                     <Link href={`/organizations/${ticket.organization.id}`} className="text-sm font-medium hover:underline flex items-center gap-2">
                       <Globe className="h-3 w-3" /> {ticket.organization.name}
                     </Link>
-                    {ticket.organization.address && (
-                      <div className="mt-1 text-sm text-muted-foreground">{ticket.organization.address}</div>
+                    {(ticket.siteAddress || ticket.organization.address) && (
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {ticket.siteName ? <span className="font-medium">{ticket.siteName} · </span> : null}
+                        {ticket.siteAddress ?? ticket.organization.address}
+                      </div>
                     )}
                   </div>
                 )}

@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { agentsTable } from "./agents";
 import { contactsTable } from "./contacts";
-import { organizationsTable } from "./organizations";
+import { organizationSitesTable, organizationsTable } from "./organizations";
 
 export type TicketAttachment = {
   name: string;
@@ -30,6 +30,9 @@ export const ticketsTable = pgTable("tickets", {
   assigneeId: integer("assignee_id").references(() => agentsTable.id, { onDelete: "set null" }),
   requesterId: integer("requester_id").references(() => contactsTable.id, { onDelete: "set null" }),
   organizationId: integer("organization_id").references(() => organizationsTable.id, { onDelete: "set null" }),
+  siteId: integer("site_id").references(() => organizationSitesTable.id, { onDelete: "set null" }),
+  siteName: text("site_name"),
+  siteAddress: text("site_address"),
   tags: text("tags").array().notNull().default([]),
   dueAt: timestamp("due_at", { withTimezone: true }),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),

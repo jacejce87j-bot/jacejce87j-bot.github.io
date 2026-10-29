@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { organizationsTable, contactsTable, ticketsTable } from "@workspace/db";
-import { eq, count, ilike, or, sql } from "drizzle-orm";
+import { organizationsTable, organizationSitesTable, contactsTable, ticketsTable } from "@workspace/db";
+import { and, eq, count, ilike } from "drizzle-orm";
+import { z } from "zod";
 import {
   CreateOrganizationBody,
   UpdateOrganizationBody,
@@ -12,6 +13,90 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+const siteInputSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  address: z.string().trim().min(1).max(2000),
+});
+
+router.get("/:id/sites", async (req, res) => {
+  const organizationId = Number(req.params.id);
+  if (!Number.isSafeInteger(organizationId) || organizationId < 1) {
+    return res.status(400).json({ error: "valid organization id is required" });
+  }
+  const [organization] = await db.select({ id: organizationsTable.id })
+    .from(organizationsTable).where(eq(organizationsTable.id, organizationId));
+  if (!organization) return res.status(404).json({ error: "Organization not found" });
+  const sites = await db.select().from(organizationSitesTable)
+    .where(eq(organizationSitesTable.organizationId, organizationId))
+    .orderBy(organizationSitesTable.name);
+  res.json(sites.map((site) => ({
+    id: site.id,
+    organizationId: site.organizationId,
+    name: site.name,
+    address: site.address,
+    createdAt: site.createdAt.toISOString(),
+    updatedAt: site.updatedAt.toISOString(),
+  })));
+});
+
+router.post("/:id/sites", async (req, res) => {
+  const organizationId = Number(req.params.id);
+  if (!Number.isSafeInteger(organizationId) || organizationId < 1) {
+    return res.status(400).json({ error: "valid organization id is required" });
+  }
+  const parsed = siteInputSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "name and address are required", details: parsed.error.issues });
+  const [organization] = await db.select({ id: organizationsTable.id })
+    .from(organizationsTable).where(eq(organizationsTable.id, organizationId));
+  if (!organization) return res.status(404).json({ error: "Organization not found" });
+  const [site] = await db.insert(organizationSitesTable)
+    .values({ organizationId, ...parsed.data }).returning();
+  res.status(201).json({
+    id: site.id,
+    organizationId: site.organizationId,
+    name: site.name,
+    address: site.address,
+    createdAt: site.createdAt.toISOString(),
+    updatedAt: site.updatedAt.toISOString(),
+  });
+});
+
+router.patch("/:id/sites/:siteId", async (req, res) => {
+  const organizationId = Number(req.params.id);
+  const siteId = Number(req.params.siteId);
+  if (!Number.isSafeInteger(organizationId) || organizationId < 1 || !Number.isSafeInteger(siteId) || siteId < 1) {
+    return res.status(400).json({ error: "valid organization and site ids are required" });
+  }
+  const parsed = siteInputSchema.partial().safeParse(req.body);
+  if (!parsed.success || Object.keys(parsed.data ?? {}).length === 0) {
+    return res.status(400).json({ error: "at least one valid site field is required", details: parsed.success ? undefined : parsed.error.issues });
+  }
+  const [site] = await db.update(organizationSitesTable).set(parsed.data)
+    .where(and(eq(organizationSitesTable.id, siteId), eq(organizationSitesTable.organizationId, organizationId)))
+    .returning();
+  if (!site) return res.status(404).json({ error: "Site not found for this organization" });
+  res.json({
+    id: site.id,
+    organizationId: site.organizationId,
+    name: site.name,
+    address: site.address,
+    createdAt: site.createdAt.toISOString(),
+    updatedAt: site.updatedAt.toISOString(),
+  });
+});
+
+router.delete("/:id/sites/:siteId", async (req, res) => {
+  const organizationId = Number(req.params.id);
+  const siteId = Number(req.params.siteId);
+  if (!Number.isSafeInteger(organizationId) || organizationId < 1 || !Number.isSafeInteger(siteId) || siteId < 1) {
+    return res.status(400).json({ error: "valid organization and site ids are required" });
+  }
+  const deleted = await db.delete(organizationSitesTable)
+    .where(and(eq(organizationSitesTable.id, siteId), eq(organizationSitesTable.organizationId, organizationId)))
+    .returning({ id: organizationSitesTable.id });
+  if (!deleted.length) return res.status(404).json({ error: "Site not found for this organization" });
+  res.status(204).send();
+});
 
 router.get("/", async (req, res) => {
   const query = ListOrganizationsQueryParams.parse({

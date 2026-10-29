@@ -8,7 +8,7 @@ import {
   useListOrganizations,
 } from '@workspace/api-client-react';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
@@ -31,6 +31,7 @@ import type { TicketAttachment } from '@workspace/api-client-react';
 import { fetchWithFallback } from '@/lib/api';
 
 type DeviceTypeOption = { id: number; name: string };
+type OrganizationSite = { id: number; organizationId: number; name: string; address: string };
 
 const PRIORITIES: TicketInput['priority'][] = ['low', 'normal', 'high', 'urgent'];
 const TYPES: TicketInput['type'][] = ['question', 'incident', 'problem', 'task'];
@@ -149,6 +150,12 @@ export default function NewTicketScreen() {
   const [selectedRequesterLabel, setSelectedRequesterLabel] = useState('');
   const [selectedOrganizationLabel, setSelectedOrganizationLabel] = useState('');
   const [selectedOrganizationAddress, setSelectedOrganizationAddress] = useState('');
+  const [organizationSites, setOrganizationSites] = useState<OrganizationSite[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
+  const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
+  const [sitesLoading, setSitesLoading] = useState(false);
+  const [sitesError, setSitesError] = useState('');
+  const siteRequestSequence = useRef(0);
   const [scheduledAtInput, setScheduledAtInput] = useState('');
   const [requesterSearch, setRequesterSearch] = useState('');
   const [organizationSearch, setOrganizationSearch] = useState('');
@@ -160,6 +167,7 @@ export default function NewTicketScreen() {
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [templateFields, setTemplateFields] = useState<any[] | null>(null);
   const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
   const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
@@ -278,8 +286,54 @@ export default function NewTicketScreen() {
     setIsUploading(false);
   };
 
+  const loadOrganizationSites = async (orgId: number) => {
+    const requestId = ++siteRequestSequence.current;
+    setSitesLoading(true);
+    setSitesError('');
+    setOrganizationSites([]);
+    setSelectedSiteId(null);
+    setSiteDropdownOpen(false);
+    try {
+      const token = (globalThis as any).__AUTH_TOKEN__ ?? await AsyncStorage.getItem('userToken');
+      if (!token) throw new Error('Your sign-in has expired. Sign in again to load organization sites.');
+      const response = await fetchWithFallback(`/api/organizations/${orgId}/sites`, {
+        headers: { Accept: 'application/json', Authorization: ['Bearer', token].join(' ') },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || `Organization sites could not be loaded (HTTP ${response.status}).`);
+      if (!Array.isArray(payload)) throw new Error('Organization sites returned an invalid response.');
+      if (requestId === siteRequestSequence.current) setOrganizationSites(payload);
+    } catch (loadError) {
+      if (requestId === siteRequestSequence.current) {
+        setSitesError(loadError instanceof Error ? loadError.message : 'Organization sites could not be loaded.');
+      }
+    } finally {
+      if (requestId === siteRequestSequence.current) setSitesLoading(false);
+    }
+  };
+
   const activeTemplates = (templatesQuery.data ?? []).filter((template) => template.isActive);
   const agents = agentsQuery.data ?? [];
+  const selectedSite = organizationSites.find((site) => site.id === selectedSiteId);
+  const jobAddress = organizationSites.length ? selectedSite?.address : selectedOrganizationAddress;
+  const selectTemplate = (template: any) => {
+    const resolvedFields = inferTemplateFields(template);
+    setSelectedTemplateId(template.id);
+    setTemplatePickerOpen(false);
+    if (resolvedFields.length) {
+      setTemplateFields(resolvedFields);
+      const vals: Record<string, string> = Object.fromEntries(resolvedFields.map((field: any) => [
+        field.key,
+        typeof field.value === 'string' ? field.value : typeof field.defaultValue === 'string' ? field.defaultValue : '',
+      ]));
+      setTemplateFieldValues(vals);
+      setDescription('');
+    } else {
+      setTemplateFields(null);
+      setTemplateFieldValues({});
+      setDescription(template.description ?? '');
+    }
+  };
 
   return (
     <KeyboardAwareScrollViewCompat
@@ -413,6 +467,11 @@ export default function NewTicketScreen() {
                 setOrganizationSearch(value);
                 setOrganizationId(null);
                 setSelectedOrganizationAddress('');
+                siteRequestSequence.current += 1;
+                setOrganizationSites([]);
+                setSelectedSiteId(null);
+                setSitesError('');
+                setSitesLoading(false);
               }}
               placeholder="Search organizations"
               placeholderTextColor={colors.mutedForeground}
@@ -437,6 +496,7 @@ export default function NewTicketScreen() {
                       setSelectedOrganizationAddress(organization.address ?? '');
                       setOrganizationSearch('');
                       setIsOrganizationDropdownOpen(false);
+                      void loadOrganizationSites(organization.id);
                     }}
                     style={({ pressed }) => [
                       styles.dropdownOption,
@@ -454,10 +514,60 @@ export default function NewTicketScreen() {
           </View>
         ) : null}
 
-        {selectedOrganizationAddress ? (
+        {sitesLoading ? (
+          <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Loading organization sites…</Text>
+        ) : null}
+        {sitesError ? (
+          <View style={styles.deviceTypeErrorRow}>
+            <Text style={[styles.error, { flex: 1, marginTop: 6 }]}>{sitesError}</Text>
+            <Pressable accessibilityRole="button" onPress={() => organizationId !== null && void loadOrganizationSites(organizationId)}>
+              <Text style={[styles.retryLinkText, { color: colors.primary }]}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {organizationSites.length ? (
+          <>
+            <Text style={[styles.label, { color: colors.foreground }]}>Site / location *</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={selectedSiteId === null ? 'Select site or location' : `Site: ${selectedSite?.name ?? ''}`}
+              accessibilityState={{ expanded: siteDropdownOpen }}
+              onPress={() => setSiteDropdownOpen((open) => !open)}
+              style={[styles.selectTrigger, { backgroundColor: colors.card, borderColor: colors.input }]}
+            >
+              <Text style={[styles.selectTriggerText, { color: selectedSiteId === null ? colors.mutedForeground : colors.foreground }]}>
+                {selectedSite?.name ?? 'Select a site / location'}
+              </Text>
+              <Feather name={siteDropdownOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+            </Pressable>
+            {siteDropdownOpen ? (
+              <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  {organizationSites.map((site) => (
+                    <Pressable
+                      key={site.id}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setSelectedSiteId(site.id);
+                        setSiteDropdownOpen(false);
+                      }}
+                      style={[styles.dropdownOption, { borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{site.name}</Text>
+                      <Text style={[styles.helperText, { color: colors.mutedForeground }]}>{site.address}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+          </>
+        ) : null}
+        {jobAddress ? (
           <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>Job address</Text>
-            <Text style={[styles.helperText, { color: colors.mutedForeground }]}>{selectedOrganizationAddress}</Text>
+            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>Job location address</Text>
+            <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
+              {jobAddress}
+            </Text>
           </View>
         ) : null}
 
@@ -475,41 +585,49 @@ export default function NewTicketScreen() {
 
         <Text style={[styles.label, { color: colors.foreground }]}>Installation template</Text>
         {activeTemplates.length ? (
-          <View style={styles.templateChoices}>
-            {activeTemplates.map((template) => (
-              <Pressable
-                key={template.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Use ${template.name} template`}
-                onPress={() => {
-                  const resolvedFields = inferTemplateFields(template);
-                  setSelectedTemplateId(template.id);
-                  if (resolvedFields.length) {
-                    setTemplateFields(resolvedFields);
-                    const vals: Record<string, string> = Object.fromEntries(resolvedFields.map((field: any) => [
-                      field.key,
-                      typeof field.value === 'string' ? field.value : typeof field.defaultValue === 'string' ? field.defaultValue : '',
-                    ]));
-                    setTemplateFieldValues(vals);
-                    setDescription('');
-                  } else {
-                    setTemplateFields(null);
-                    setTemplateFieldValues({});
-                    setDescription(template.description ?? '');
-                  }
-                }}
-                style={[
-                  styles.choice,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                  selectedTemplateId === template.id && { backgroundColor: colors.accent, borderColor: colors.primary },
-                ]}
-              >
-                <Text style={[styles.choiceText, { color: selectedTemplateId === template.id ? colors.accentForeground : colors.mutedForeground }]}>
-                  {template.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={selectedTemplateId === null ? 'Select installation template' : `Template: ${activeTemplates.find((template) => template.id === selectedTemplateId)?.name ?? ''}`}
+              accessibilityState={{ expanded: templatePickerOpen }}
+              onPress={() => setTemplatePickerOpen((open) => !open)}
+              style={[styles.selectTrigger, { backgroundColor: colors.card, borderColor: colors.input }]}
+            >
+              <Text style={[styles.selectTriggerText, { color: selectedTemplateId === null ? colors.mutedForeground : colors.foreground }]}>
+                {activeTemplates.find((template) => template.id === selectedTemplateId)?.name ?? 'Select a template'}
+              </Text>
+              <Feather name={templatePickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+            </Pressable>
+            {templatePickerOpen ? (
+              <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setSelectedTemplateId(null);
+                      setTemplateFields(null);
+                      setTemplateFieldValues({});
+                      setDescription('');
+                      setTemplatePickerOpen(false);
+                    }}
+                    style={[styles.dropdownOption, { borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.dropdownOptionText, { color: colors.mutedForeground }]}>No template</Text>
+                  </Pressable>
+                  {activeTemplates.map((template) => (
+                    <Pressable
+                      key={template.id}
+                      accessibilityRole="button"
+                      onPress={() => selectTemplate(template)}
+                      style={[styles.dropdownOption, { borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{template.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+          </>
         ) : (
           <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
             {templatesQuery.isLoading
@@ -756,6 +874,18 @@ export default function NewTicketScreen() {
               setError('Select both a requester and an organization before creating the ticket.');
               return;
             }
+            if (sitesLoading) {
+              setError('Wait for the organization sites to finish loading before creating the ticket.');
+              return;
+            }
+            if (sitesError) {
+              setError('Load the organization sites before creating the ticket. Use Retry and select a site if available.');
+              return;
+            }
+            if (organizationSites.length && selectedSiteId === null) {
+              setError('Select a site or location before creating the ticket.');
+              return;
+            }
             const scheduledDate = scheduledAtInput ? new Date(scheduledAtInput) : null;
             if (scheduledDate && Number.isNaN(scheduledDate.getTime())) {
               setError('Enter the booking date and time in YYYY-MM-DDTHH:mm format.');
@@ -782,6 +912,7 @@ export default function NewTicketScreen() {
                 channel,
                 requesterId,
                 organizationId,
+                siteId: selectedSiteId,
                 assigneeId,
                 attachments,
                 scheduledAt: scheduledDate?.toISOString() ?? null,
@@ -867,7 +998,6 @@ const styles = StyleSheet.create({
   choiceText: { fontFamily: 'Inter_500Medium', fontSize: 12, textTransform: 'capitalize' },
   sectionCard: { borderWidth: 1, borderRadius: 10, padding: 14, marginTop: 16, marginBottom: 8 },
   sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 15, marginBottom: 8 },
-  templateChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   templateFieldGroup: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 6 },
   templateSection: { marginTop: 8 },
   templateSectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 12, marginBottom: 4 },

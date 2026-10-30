@@ -23,9 +23,31 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl, getAuthHeaders } from "@/lib/api";
 
-type SiteForm = { id?: number; name: string; address: string };
+type SiteForm = { id?: number; name: string; address: string; latitude: string; longitude: string };
+type OrganizationSiteResponse = {
+  id: number;
+  organizationId: number;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+type OrganizationSiteInput = {
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+};
 
-async function requestOrganizationSites(path: string, method = "GET", data?: { name: string; address: string }) {
+const toSiteForm = (site: OrganizationSiteResponse): SiteForm => ({
+  ...site,
+  latitude: site.latitude == null ? "" : String(site.latitude),
+  longitude: site.longitude == null ? "" : String(site.longitude),
+});
+
+async function requestOrganizationSites(path: string, method = "GET", data?: OrganizationSiteInput) {
   const response = await fetch(getApiUrl(path), {
     method,
     headers: {
@@ -97,7 +119,7 @@ export default function OrganizationList() {
     setSitesLoading(true);
     setSitesError("");
     try {
-      const sites = await requestOrganizationSites(`/api/organizations/${organizationId}/sites`) as SiteForm[];
+      const sites = (await requestOrganizationSites(`/api/organizations/${organizationId}/sites`) as OrganizationSiteResponse[]).map(toSiteForm);
       if (!Array.isArray(sites)) throw new Error("Organization sites returned an invalid response.");
       if (requestId === siteLoadSequence.current) {
         setSiteRows(sites);
@@ -132,9 +154,25 @@ export default function OrganizationList() {
 
   const saveOrganization = async () => {
     if (!form.name.trim()) return;
-    const populatedSites = siteRows.filter((site) => site.name.trim() || site.address.trim());
+    const populatedSites = siteRows.filter((site) =>
+      site.name.trim() || site.address.trim() || site.latitude.trim() || site.longitude.trim()
+    );
     if (populatedSites.some((site) => !site.name.trim() || !site.address.trim())) {
       setSitesError("Enter both a name and address for each site, or remove the empty site row.");
+      return;
+    }
+    if (populatedSites.some((site) => Boolean(site.latitude.trim()) !== Boolean(site.longitude.trim()))) {
+      setSitesError("Enter both latitude and longitude for a site, or leave both blank.");
+      return;
+    }
+    const invalidCoordinates = populatedSites.some((site) => {
+      const latitude = site.latitude.trim() ? Number(site.latitude) : null;
+      const longitude = site.longitude.trim() ? Number(site.longitude) : null;
+      return (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90))
+        || (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180));
+    });
+    if (invalidCoordinates) {
+      setSitesError("Enter a latitude between -90 and 90 and a longitude between -180 and 180.");
       return;
     }
     if (sitesError) return;
@@ -169,16 +207,26 @@ export default function OrganizationList() {
       for (let index = 0; index < siteRows.length; index += 1) {
         const site = siteRows[index];
         if (!site || (!site.name.trim() && !site.address.trim())) continue;
-        const values = { name: site.name.trim(), address: site.address.trim() };
+        const values: OrganizationSiteInput = {
+          name: site.name.trim(),
+          address: site.address.trim(),
+          latitude: site.latitude.trim() ? Number(site.latitude) : null,
+          longitude: site.longitude.trim() ? Number(site.longitude) : null,
+        };
         if (!site.id) {
-          const createdSite = await requestOrganizationSites(`/api/organizations/${orgId}/sites`, "POST", values) as SiteForm;
+          const createdSite = toSiteForm(await requestOrganizationSites(`/api/organizations/${orgId}/sites`, "POST", values) as OrganizationSiteResponse);
           if (createdSite.id) {
             setSiteRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, id: createdSite.id } : row));
             setOriginalSiteRows((rows) => [...rows, createdSite]);
           }
         } else {
           const original = originalById.get(site.id);
-          if (original && (original.name !== values.name || original.address !== values.address)) {
+          if (original && (
+            original.name !== values.name
+            || original.address !== values.address
+            || (original.latitude.trim() ? Number(original.latitude) : null) !== values.latitude
+            || (original.longitude.trim() ? Number(original.longitude) : null) !== values.longitude
+          )) {
             await requestOrganizationSites(`/api/organizations/${orgId}/sites/${site.id}`, "PATCH", values);
           }
         }
@@ -380,7 +428,7 @@ export default function OrganizationList() {
                   size="sm"
                   onClick={() => {
                     setSitesError("");
-                    setSiteRows((rows) => [...rows, { name: "", address: "" }]);
+                    setSiteRows((rows) => [...rows, { name: "", address: "", latitude: "", longitude: "" }]);
                   }}
                 >
                   <Plus className="mr-1 h-4 w-4" /> Add site
@@ -388,7 +436,7 @@ export default function OrganizationList() {
               </div>
               {sitesLoading ? <p className="text-sm text-muted-foreground">Loading sites…</p> : null}
               {siteRows.map((site, index) => (
-                <div key={site.id ?? `new-${index}`} className="grid gap-2 rounded-md bg-muted/30 p-3 sm:grid-cols-[1fr_1.5fr_auto]">
+                <div key={site.id ?? `new-${index}`} className="grid gap-2 rounded-md bg-muted/30 p-3 sm:grid-cols-[1fr_1.5fr_1fr_1fr_auto]">
                   <Input
                     value={site.name}
                     onChange={(event) => {
@@ -406,6 +454,32 @@ export default function OrganizationList() {
                     }}
                     placeholder="Full job address"
                     aria-label={`Site ${index + 1} address`}
+                  />
+                  <Input
+                    type="number"
+                    min="-90"
+                    max="90"
+                    step="any"
+                    value={site.latitude}
+                    onChange={(event) => {
+                      setSitesError("");
+                      setSiteRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, latitude: event.target.value } : row));
+                    }}
+                    placeholder="Latitude"
+                    aria-label={`Site ${index + 1} latitude`}
+                  />
+                  <Input
+                    type="number"
+                    min="-180"
+                    max="180"
+                    step="any"
+                    value={site.longitude}
+                    onChange={(event) => {
+                      setSitesError("");
+                      setSiteRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, longitude: event.target.value } : row));
+                    }}
+                    placeholder="Longitude"
+                    aria-label={`Site ${index + 1} longitude`}
                   />
                   <Button
                     type="button"

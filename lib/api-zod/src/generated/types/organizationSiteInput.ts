@@ -11,4 +11,16 @@ export interface OrganizationSiteInput {
   name: string;
   /** @minLength 1 */
   address: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     * @nullable
+     */
+  latitude?: number | null;
+  /**
+     * @minimum -180
+     * @maximum 180
+     * @nullable
+     */
+  longitude?: number | null;
 }

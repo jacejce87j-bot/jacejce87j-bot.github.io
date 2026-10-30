@@ -577,11 +577,21 @@ export const ListOrganizationSitesParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const listOrganizationSitesResponseLatitudeMin = -90;
+export const listOrganizationSitesResponseLatitudeMax = 90;
+
+export const listOrganizationSitesResponseLongitudeMin = -180;
+export const listOrganizationSitesResponseLongitudeMax = 180;
+
+
+
 export const ListOrganizationSitesResponseItem = zod.object({
   "id": zod.number().int(),
   "organizationId": zod.number().int(),
   "name": zod.string(),
   "address": zod.string(),
+  "latitude": zod.number().min(listOrganizationSitesResponseLatitudeMin).max(listOrganizationSitesResponseLatitudeMax).nullable(),
+  "longitude": zod.number().min(listOrganizationSitesResponseLongitudeMin).max(listOrganizationSitesResponseLongitudeMax).nullable(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -597,18 +607,36 @@ export const CreateOrganizationSiteParams = zod.object({
 
 
 
+export const createOrganizationSiteBodyLatitudeMin = -90;
+export const createOrganizationSiteBodyLatitudeMax = 90;
+
+export const createOrganizationSiteBodyLongitudeMin = -180;
+export const createOrganizationSiteBodyLongitudeMax = 180;
+
 
 
 export const CreateOrganizationSiteBody = zod.object({
   "name": zod.string().min(1),
-  "address": zod.string().min(1)
+  "address": zod.string().min(1),
+  "latitude": zod.number().min(createOrganizationSiteBodyLatitudeMin).max(createOrganizationSiteBodyLatitudeMax).nullish(),
+  "longitude": zod.number().min(createOrganizationSiteBodyLongitudeMin).max(createOrganizationSiteBodyLongitudeMax).nullish()
 })
+
+export const createOrganizationSiteResponseLatitudeMin = -90;
+export const createOrganizationSiteResponseLatitudeMax = 90;
+
+export const createOrganizationSiteResponseLongitudeMin = -180;
+export const createOrganizationSiteResponseLongitudeMax = 180;
+
+
 
 export const CreateOrganizationSiteResponse = zod.object({
   "id": zod.number().int(),
   "organizationId": zod.number().int(),
   "name": zod.string(),
   "address": zod.string(),
+  "latitude": zod.number().min(createOrganizationSiteResponseLatitudeMin).max(createOrganizationSiteResponseLatitudeMax).nullable(),
+  "longitude": zod.number().min(createOrganizationSiteResponseLongitudeMin).max(createOrganizationSiteResponseLongitudeMax).nullable(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -624,18 +652,36 @@ export const UpdateOrganizationSiteParams = zod.object({
 
 
 
+export const updateOrganizationSiteBodyLatitudeMin = -90;
+export const updateOrganizationSiteBodyLatitudeMax = 90;
+
+export const updateOrganizationSiteBodyLongitudeMin = -180;
+export const updateOrganizationSiteBodyLongitudeMax = 180;
+
 
 
 export const UpdateOrganizationSiteBody = zod.object({
   "name": zod.string().min(1),
-  "address": zod.string().min(1)
+  "address": zod.string().min(1),
+  "latitude": zod.number().min(updateOrganizationSiteBodyLatitudeMin).max(updateOrganizationSiteBodyLatitudeMax).nullish(),
+  "longitude": zod.number().min(updateOrganizationSiteBodyLongitudeMin).max(updateOrganizationSiteBodyLongitudeMax).nullish()
 })
+
+export const updateOrganizationSiteResponseLatitudeMin = -90;
+export const updateOrganizationSiteResponseLatitudeMax = 90;
+
+export const updateOrganizationSiteResponseLongitudeMin = -180;
+export const updateOrganizationSiteResponseLongitudeMax = 180;
+
+
 
 export const UpdateOrganizationSiteResponse = zod.object({
   "id": zod.number().int(),
   "organizationId": zod.number().int(),
   "name": zod.string(),
   "address": zod.string(),
+  "latitude": zod.number().min(updateOrganizationSiteResponseLatitudeMin).max(updateOrganizationSiteResponseLatitudeMax).nullable(),
+  "longitude": zod.number().min(updateOrganizationSiteResponseLongitudeMin).max(updateOrganizationSiteResponseLongitudeMax).nullable(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

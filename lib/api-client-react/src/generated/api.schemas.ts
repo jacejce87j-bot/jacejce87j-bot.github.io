@@ -478,6 +478,18 @@ export interface OrganizationSite {
   organizationId: number;
   name: string;
   address: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     * @nullable
+     */
+  latitude: number | null;
+  /**
+     * @minimum -180
+     * @maximum 180
+     * @nullable
+     */
+  longitude: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -487,6 +499,18 @@ export interface OrganizationSiteInput {
   name: string;
   /** @minLength 1 */
   address: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     * @nullable
+     */
+  latitude?: number | null;
+  /**
+     * @minimum -180
+     * @maximum 180
+     * @nullable
+     */
+  longitude?: number | null;
 }
 
 export type SlaPolicyPriority = typeof SlaPolicyPriority[keyof typeof SlaPolicyPriority];

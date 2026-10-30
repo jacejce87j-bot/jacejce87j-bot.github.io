@@ -16,6 +16,19 @@ const router = Router();
 const siteInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
   address: z.string().trim().min(1).max(2000),
+  latitude: z.number().min(-90).max(90).nullable(),
+  longitude: z.number().min(-180).max(180).nullable(),
+});
+
+const serializeSite = (site: typeof organizationSitesTable.$inferSelect) => ({
+  id: site.id,
+  organizationId: site.organizationId,
+  name: site.name,
+  address: site.address,
+  latitude: site.latitude,
+  longitude: site.longitude,
+  createdAt: site.createdAt.toISOString(),
+  updatedAt: site.updatedAt.toISOString(),
 });
 
 router.get("/:id/sites", async (req, res) => {
@@ -29,14 +42,7 @@ router.get("/:id/sites", async (req, res) => {
   const sites = await db.select().from(organizationSitesTable)
     .where(eq(organizationSitesTable.organizationId, organizationId))
     .orderBy(organizationSitesTable.name);
-  res.json(sites.map((site) => ({
-    id: site.id,
-    organizationId: site.organizationId,
-    name: site.name,
-    address: site.address,
-    createdAt: site.createdAt.toISOString(),
-    updatedAt: site.updatedAt.toISOString(),
-  })));
+  res.json(sites.map(serializeSite));
 });
 
 router.post("/:id/sites", async (req, res) => {
@@ -44,21 +50,21 @@ router.post("/:id/sites", async (req, res) => {
   if (!Number.isSafeInteger(organizationId) || organizationId < 1) {
     return res.status(400).json({ error: "valid organization id is required" });
   }
-  const parsed = siteInputSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "name and address are required", details: parsed.error.issues });
+  const parsed = siteInputSchema.safeParse({
+    ...req.body,
+    latitude: req.body?.latitude ?? null,
+    longitude: req.body?.longitude ?? null,
+  });
+  if (!parsed.success) return res.status(400).json({ error: "name, address, and valid coordinates are required", details: parsed.error.issues });
+  if ((parsed.data.latitude === null) !== (parsed.data.longitude === null)) {
+    return res.status(400).json({ error: "latitude and longitude must both be provided or both be left blank" });
+  }
   const [organization] = await db.select({ id: organizationsTable.id })
     .from(organizationsTable).where(eq(organizationsTable.id, organizationId));
   if (!organization) return res.status(404).json({ error: "Organization not found" });
   const [site] = await db.insert(organizationSitesTable)
     .values({ organizationId, ...parsed.data }).returning();
-  res.status(201).json({
-    id: site.id,
-    organizationId: site.organizationId,
-    name: site.name,
-    address: site.address,
-    createdAt: site.createdAt.toISOString(),
-    updatedAt: site.updatedAt.toISOString(),
-  });
+  res.status(201).json(serializeSite(site));
 });
 
 router.patch("/:id/sites/:siteId", async (req, res) => {
@@ -71,18 +77,19 @@ router.patch("/:id/sites/:siteId", async (req, res) => {
   if (!parsed.success || Object.keys(parsed.data ?? {}).length === 0) {
     return res.status(400).json({ error: "at least one valid site field is required", details: parsed.success ? undefined : parsed.error.issues });
   }
+  const [existingSite] = await db.select().from(organizationSitesTable)
+    .where(and(eq(organizationSitesTable.id, siteId), eq(organizationSitesTable.organizationId, organizationId)));
+  if (!existingSite) return res.status(404).json({ error: "Site not found for this organization" });
+  const latitude = parsed.data.latitude !== undefined ? parsed.data.latitude : existingSite.latitude;
+  const longitude = parsed.data.longitude !== undefined ? parsed.data.longitude : existingSite.longitude;
+  if ((latitude === null) !== (longitude === null)) {
+    return res.status(400).json({ error: "latitude and longitude must both be provided or both be left blank" });
+  }
   const [site] = await db.update(organizationSitesTable).set(parsed.data)
     .where(and(eq(organizationSitesTable.id, siteId), eq(organizationSitesTable.organizationId, organizationId)))
     .returning();
   if (!site) return res.status(404).json({ error: "Site not found for this organization" });
-  res.json({
-    id: site.id,
-    organizationId: site.organizationId,
-    name: site.name,
-    address: site.address,
-    createdAt: site.createdAt.toISOString(),
-    updatedAt: site.updatedAt.toISOString(),
-  });
+  res.json(serializeSite(site));
 });
 
 router.delete("/:id/sites/:siteId", async (req, res) => {

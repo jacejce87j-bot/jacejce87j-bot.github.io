@@ -1365,7 +1365,7 @@ components:
 
     OrganizationSite:
       type: object
-      required: [id, organizationId, name, address, createdAt, updatedAt]
+      required: [id, organizationId, name, address, latitude, longitude, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1375,6 +1375,14 @@ components:
           type: string
         address:
           type: string
+        latitude:
+          type: ["number", "null"]
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: ["number", "null"]
+          minimum: -180
+          maximum: 180
         createdAt:
           type: string
         updatedAt:
@@ -1390,6 +1398,14 @@ components:
         address:
           type: string
           minLength: 1
+        latitude:
+          type: ["number", "null"]
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: ["number", "null"]
+          minimum: -180
+          maximum: 180
 
     SlaPolicy:
       type: object

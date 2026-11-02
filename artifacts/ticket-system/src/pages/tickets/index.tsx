@@ -18,6 +18,7 @@ type TicketListRow = {
   subject: string;
   status: TicketStatus;
   priority: TicketPriority;
+  organization?: { id: number; name: string } | null;
   requester?: { name: string } | null;
   assignee?: { name: string } | null;
   updatedAt: string;
@@ -202,6 +203,7 @@ export default function TicketList() {
                 <TableRow>
                   <TableHead className="w-[80px]">ID</TableHead>
                   <TableHead>Subject</TableHead>
+                  <TableHead>Organization</TableHead>
                   <TableHead>Requester</TableHead>
                   <TableHead>Assignee</TableHead>
                   <TableHead>Status</TableHead>
@@ -211,15 +213,15 @@ export default function TicketList() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center">Loading...</TableCell>
                   </TableRow>
                 ) : isError ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-destructive">{error instanceof Error ? error.message : "Unable to load tickets."}</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center text-destructive">{error instanceof Error ? error.message : "Unable to load tickets."}</TableCell>
                   </TableRow>
                 ) : data?.data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">No tickets found.</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center">No tickets found.</TableCell>
                   </TableRow>
                 ) : (
                   data?.data.map((ticket) => (
@@ -234,6 +236,13 @@ export default function TicketList() {
                             {ticket.subject}
                           </Link>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {ticket.organization ? (
+                          <span className="text-sm">{ticket.organization.name}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {ticket.requester ? (

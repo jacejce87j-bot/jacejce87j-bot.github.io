@@ -51,6 +51,22 @@ type TicketStockUsage = {
   deductedAt: string | null;
 };
 
+function renderTicketReferences(text: string) {
+  return text.split(/(Ticket\s+#\d+|#\d+)/gi).map((part, index) => {
+    const match = part.match(/^(?:Ticket\s+)?#(\d+)$/i);
+    if (!match) return part;
+    return (
+      <Link
+        key={`${match[1]}-${index}`}
+        href={`/tickets/${match[1]}`}
+        className="font-medium text-primary underline-offset-2 hover:underline"
+      >
+        {part}
+      </Link>
+    );
+  });
+}
+
 function toLocalDateTimeInput(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -524,7 +540,7 @@ export default function TicketDetail() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-4 text-sm whitespace-pre-wrap">
-                    {ticket.description || "No description provided."}
+                    {ticket.description ? renderTicketReferences(ticket.description) : "No description provided."}
                   </CardContent>
                 </Card>
               </div>
@@ -622,7 +638,7 @@ export default function TicketDetail() {
                           </div>
                         </CardHeader>
                         <CardContent className="p-4 text-sm whitespace-pre-wrap">
-                          {comment.body}
+                          {renderTicketReferences(comment.body)}
                           {comment.attachments?.length > 0 && (
                             <div className="mt-4 grid gap-2 sm:grid-cols-2">
                               {comment.attachments.map((attachment) => (

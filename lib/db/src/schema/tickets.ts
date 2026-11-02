@@ -10,6 +10,7 @@ export type TicketAttachment = {
   size: number;
   contentType: string;
   objectPath: string;
+  previewObjectPath?: string;
   uploadedAt: string;
 };
 

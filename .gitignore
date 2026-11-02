@@ -7,6 +7,9 @@ out-tsc
 *.tsbuildinfo
 .expo
 .expo-shared
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
 
 # dependencies
 node_modules
@@ -58,7 +61,7 @@ Thumbs.db
 .cache/
 .local/
 
-# deployment safety — don't push binaries/backups
+# deployment safety ï¿½ don't push binaries/backups
 *.zip
 *.mp4
 *.pdf
@@ -68,3 +71,8 @@ APK/
 backups/
 artifacts-backup-*/
 Zendesk-Salesforce/
+/merge-report.json
+
+# Keep EAS archives free of repository metadata and unrelated Python environments
+.git/
+.venv/

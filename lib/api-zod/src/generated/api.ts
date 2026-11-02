@@ -112,6 +112,7 @@ export const ListTicketsResponse = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "templateData": zod.array(zod.object({
@@ -171,6 +172,7 @@ export const CreateTicketBody = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "templateData": zod.array(zod.object({
@@ -272,6 +274,7 @@ export const CreateTicketResponse = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "templateData": zod.array(zod.object({
@@ -384,6 +387,7 @@ export const GetTicketResponse = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "templateData": zod.array(zod.object({
@@ -449,6 +453,7 @@ export const UpdateTicketBody = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "vesaNum": zod.string().nullish(),
@@ -530,6 +535,7 @@ export const UpdateTicketResponse = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "templateData": zod.array(zod.object({
@@ -719,6 +725,46 @@ export const RequestUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary Upload an original image with its compressed preview
+ */
+export const UploadTicketImagePairBody = zod.object({
+  "original": zod.instanceof(File),
+  "uploadId": zod.string(),
+  "originalName": zod.string(),
+  "originalSize": zod.number().int(),
+  "contentType": zod.string(),
+  "previewDataBase64": zod.string(),
+  "previewSize": zod.number().int()
+})
+
+export const UploadTicketImagePairResponse = zod.object({
+  "name": zod.string(),
+  "size": zod.number().int(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
+  "uploadedAt": zod.string()
+})
+
+
+/**
+ * @summary Get the result of an idempotent image upload
+ */
+export const GetTicketImageUploadParams = zod.object({
+  "uploadId": zod.coerce.string()
+})
+
+export const GetTicketImageUploadResponse = zod.object({
+  "name": zod.string(),
+  "size": zod.number().int(),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
+  "uploadedAt": zod.string()
+})
+
+
+/**
  * Moves all comments and activity from the source ticket into the target ticket, then closes the source ticket.
  * @summary Merge a ticket into another ticket
  */
@@ -805,6 +851,7 @@ export const MergeTicketResponse = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "templateData": zod.array(zod.object({
@@ -855,6 +902,7 @@ export const ListTicketCommentsResponseItem = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })),
   "createdAt": zod.string()
@@ -881,6 +929,7 @@ export const CreateTicketCommentBody = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional()
 })
@@ -898,6 +947,7 @@ export const CreateTicketCommentResponse = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })),
   "createdAt": zod.string()
@@ -1166,6 +1216,7 @@ export const ListContactTicketsResponseItem = zod.object({
   "size": zod.number().int(),
   "contentType": zod.string(),
   "objectPath": zod.string(),
+  "previewObjectPath": zod.string().optional(),
   "uploadedAt": zod.string()
 })).optional(),
   "templateData": zod.array(zod.object({

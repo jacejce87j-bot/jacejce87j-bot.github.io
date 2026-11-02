@@ -32,6 +32,7 @@ export * from './dailyCount';
 export * from './dashboardStats';
 export * from './getDashboardActivityParams';
 export * from './healthStatus';
+export * from './imagePairUploadBody';
 export * from './listContactsParams';
 export * from './listOrganizationsParams';
 export * from './listTicketsParams';

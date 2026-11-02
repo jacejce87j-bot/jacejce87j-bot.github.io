@@ -1,3 +1,14 @@
+DO $$
+BEGIN
+  IF to_regclass('public.macro_usage_events') IS NULL
+    AND to_regclass('public.macro_usages') IS NOT NULL THEN
+    ALTER TABLE public.macro_usages RENAME TO macro_usage_events;
+  ELSIF to_regclass('public.macro_usage_events') IS NOT NULL
+    AND to_regclass('public.macro_usages') IS NOT NULL THEN
+    RAISE EXCEPTION 'Both macro_usage_events and macro_usages exist; reconcile them before applying this migration';
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS macro_usage_events (
   id SERIAL PRIMARY KEY,
   macro_id INTEGER NOT NULL REFERENCES ticket_macros(id) ON DELETE CASCADE,

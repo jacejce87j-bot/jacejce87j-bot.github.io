@@ -33,6 +33,12 @@ const transferStockSchema = z.object({
   quantity: z.number().int().positive().max(100_000),
 });
 
+const returnStockSchema = z.object({
+  fieldAgentId: z.number().int().positive(),
+  stockItemId: z.number().int().positive(),
+  quantity: z.number().int().positive().max(100_000),
+});
+
 router.get("/stock", async (_req, res) => {
   try {
     const items = await db.select().from(stockItemsTable).orderBy(asc(stockItemsTable.name));
@@ -216,6 +222,106 @@ router.post("/stock/transfers", async (req, res) => {
     });
   } catch {
     res.status(500).json({ error: "Unable to transfer stock to the Field Agent." });
+  }
+});
+
+router.post("/stock/returns", async (req, res) => {
+  if (!["admin", "supervisor"].includes(req.user?.role ?? "")) {
+    res.status(403).json({ error: "Only administrators and supervisors can return stock from Field Agents." });
+    return;
+  }
+  const parsed = returnStockSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Select a Field Agent and stock item, and enter a positive return quantity." });
+    return;
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [agent] = await tx
+        .select()
+        .from(fieldAgentsTable)
+        .where(eq(fieldAgentsTable.id, parsed.data.fieldAgentId))
+        .for("update");
+      if (!agent) return { error: "agent_not_found" as const };
+
+      const [item] = await tx
+        .select()
+        .from(stockItemsTable)
+        .where(eq(stockItemsTable.id, parsed.data.stockItemId))
+        .for("update");
+      if (!item) return { error: "stock_not_found" as const };
+
+      const [balance] = await tx
+        .select()
+        .from(fieldAgentStockTable)
+        .where(and(
+          eq(fieldAgentStockTable.fieldAgentId, agent.id),
+          eq(fieldAgentStockTable.stockItemId, item.id),
+        ))
+        .for("update");
+      if (!balance || balance.quantityOnHand < parsed.data.quantity) {
+        return {
+          error: "insufficient_agent_stock" as const,
+          details: `${agent.name} has ${balance?.quantityOnHand ?? 0} ${item.unit} of ${item.name}; cannot return ${parsed.data.quantity}.`,
+        };
+      }
+
+      const returnedAt = new Date();
+      await tx
+        .update(fieldAgentStockTable)
+        .set({ quantityOnHand: balance.quantityOnHand - parsed.data.quantity, updatedAt: returnedAt })
+        .where(and(
+          eq(fieldAgentStockTable.fieldAgentId, agent.id),
+          eq(fieldAgentStockTable.stockItemId, item.id),
+        ));
+      await tx
+        .update(stockItemsTable)
+        .set({ quantityOnHand: item.quantityOnHand + parsed.data.quantity, updatedAt: returnedAt })
+        .where(eq(stockItemsTable.id, item.id));
+      await tx.insert(stockMovementsTable).values([
+        {
+          stockItemId: item.id,
+          fieldAgentId: agent.id,
+          movementType: "return_from_field_agent",
+          quantityDelta: -parsed.data.quantity,
+          reason: `Returned to Orion Stock by ${agent.name}`,
+          recordedBy: req.user?.id ?? null,
+          createdAt: returnedAt,
+        },
+        {
+          stockItemId: item.id,
+          movementType: "received_by_orion_stock",
+          quantityDelta: parsed.data.quantity,
+          reason: `Returned from ${agent.name}`,
+          recordedBy: req.user?.id ?? null,
+          createdAt: returnedAt,
+        },
+      ]);
+      return {
+        error: "ok" as const,
+        item: { ...item, quantityOnHand: item.quantityOnHand + parsed.data.quantity },
+        fieldAgent: agent,
+        quantity: parsed.data.quantity,
+      };
+    });
+    if (result.error === "agent_not_found") {
+      res.status(404).json({ error: "Field Agent not found." });
+      return;
+    }
+    if (result.error === "stock_not_found") {
+      res.status(404).json({ error: "Stock item not found." });
+      return;
+    }
+    if (result.error === "insufficient_agent_stock") {
+      res.status(409).json({ error: result.details });
+      return;
+    }
+    res.status(201).json({
+      return: { item: result.item, fieldAgent: result.fieldAgent, quantity: result.quantity },
+    });
+  } catch {
+    res.status(500).json({ error: "Unable to return stock to Orion Stock." });
   }
 });
 

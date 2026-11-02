@@ -16,7 +16,8 @@
       "usesCleartextTraffic": true
     },
     "plugins": [
-      "./plugins/withNetworkSecurityConfig.js"
+      "./plugins/withNetworkSecurityConfig.js",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

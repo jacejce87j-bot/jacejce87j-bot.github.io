@@ -134,6 +134,7 @@ export interface TicketAttachment {
   size: number;
   contentType: string;
   objectPath: string;
+  previewObjectPath?: string;
   uploadedAt: string;
 }
 
@@ -398,6 +399,16 @@ export interface TicketUpdate {
   vesaNum?: string | null;
   /** @nullable */
   hours?: string | null;
+}
+
+export interface ImagePairUploadBody {
+  original: Blob;
+  uploadId: string;
+  originalName: string;
+  originalSize: number;
+  contentType: string;
+  previewDataBase64: string;
+  previewSize: number;
 }
 
 export type TicketTemplateFieldType = typeof TicketTemplateFieldType[keyof typeof TicketTemplateFieldType];

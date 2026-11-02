@@ -250,8 +250,14 @@ CREATE TABLE IF NOT EXISTS attachments (
   size INTEGER,
   uploaded_by VARCHAR REFERENCES users(id) ON DELETE SET NULL,
   data BYTEA NOT NULL,
+  upload_key TEXT,
+  preview_id VARCHAR REFERENCES attachments(id),
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS attachments_upload_key_unique_idx
+  ON attachments (upload_key)
+  WHERE upload_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS ticket_rules (
   id SERIAL PRIMARY KEY,

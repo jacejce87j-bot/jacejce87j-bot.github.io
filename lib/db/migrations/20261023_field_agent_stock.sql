@@ -32,6 +32,8 @@ ALTER TABLE stock_movements
     'ticket_usage_reversal',
     'transfer_to_field_agent',
     'received_by_field_agent',
+    'return_from_field_agent',
+    'received_by_orion_stock',
     'field_agent_ticket_usage',
     'field_agent_ticket_usage_reversal'
   ));

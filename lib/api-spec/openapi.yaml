@@ -291,6 +291,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/UploadUrlGrant"
 
+  /storage/uploads/image-pair:
+    post:
+      operationId: uploadTicketImagePair
+      tags: [storage]
+      summary: Upload an original image with its compressed preview
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImagePairUploadBody"
+      responses:
+        "200":
+          description: The original attachment and linked preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketAttachment"
+        "400":
+          description: Invalid image upload
+        "413":
+          description: Original image is too large
+
+  /storage/uploads/image-pair/{uploadId}:
+    get:
+      operationId: getTicketImageUpload
+      tags: [storage]
+      summary: Get the result of an idempotent image upload
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The existing original attachment and linked preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketAttachment"
+        "404":
+          description: No completed upload exists for this ID
+
   /tickets/{id}/merge:
     post:
       operationId: mergeTicket
@@ -1208,8 +1252,30 @@ components:
           type: string
         objectPath:
           type: string
+        previewObjectPath:
+          type: string
         uploadedAt:
           type: string
+
+    ImagePairUploadBody:
+      type: object
+      required: [original, uploadId, originalName, originalSize, contentType, previewDataBase64, previewSize]
+      properties:
+        original:
+          type: string
+          format: binary
+        uploadId:
+          type: string
+        originalName:
+          type: string
+        originalSize:
+          type: integer
+        contentType:
+          type: string
+        previewDataBase64:
+          type: string
+        previewSize:
+          type: integer
 
     TicketTemplateValue:
       type: object

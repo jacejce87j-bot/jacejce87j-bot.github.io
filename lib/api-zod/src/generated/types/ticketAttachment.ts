@@ -11,5 +11,6 @@ export interface TicketAttachment {
   size: number;
   contentType: string;
   objectPath: string;
+  previewObjectPath?: string;
   uploadedAt: string;
 }

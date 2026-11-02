@@ -37,6 +37,7 @@ import type {
   DashboardStats,
   GetDashboardActivityParams,
   HealthStatus,
+  ImagePairUploadBody,
   ListContactsParams,
   ListOrganizationsParams,
   ListTicketsParams,
@@ -53,6 +54,7 @@ import type {
   SlaPolicyUpdate,
   Tag,
   Ticket,
+  TicketAttachment,
   TicketInput,
   TicketMergeInput,
   TicketPage,
@@ -910,6 +912,162 @@ export const useRequestUploadUrl = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getRequestUploadUrlMutationOptions(options));
     }
+
+export const getUploadTicketImagePairUrl = () => {
+
+
+
+
+  return `/api/storage/uploads/image-pair`
+}
+
+/**
+ * @summary Upload an original image with its compressed preview
+ */
+export const uploadTicketImagePair = async (imagePairUploadBody: ImagePairUploadBody, options?: Parameters<typeof customFetch>[1]): Promise<TicketAttachment> => {
+    const formData = new FormData();
+formData.append(`original`, imagePairUploadBody.original);
+formData.append(`uploadId`, imagePairUploadBody.uploadId);
+formData.append(`originalName`, imagePairUploadBody.originalName);
+formData.append(`originalSize`, imagePairUploadBody.originalSize.toString())
+formData.append(`contentType`, imagePairUploadBody.contentType);
+formData.append(`previewDataBase64`, imagePairUploadBody.previewDataBase64);
+formData.append(`previewSize`, imagePairUploadBody.previewSize.toString())
+
+  return customFetch<TicketAttachment>(getUploadTicketImagePairUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getUploadTicketImagePairMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTicketImagePair>>, TError,{data: BodyType<ImagePairUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadTicketImagePair>>, TError,{data: BodyType<ImagePairUploadBody>}, TContext> => {
+
+const mutationKey = ['uploadTicketImagePair'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadTicketImagePair>>, {data: BodyType<ImagePairUploadBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadTicketImagePair(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadTicketImagePairMutationResult = NonNullable<Awaited<ReturnType<typeof uploadTicketImagePair>>>
+    export type UploadTicketImagePairMutationBody = BodyType<ImagePairUploadBody>
+    export type UploadTicketImagePairMutationError = ErrorType<void>
+
+    /**
+ * @summary Upload an original image with its compressed preview
+ */
+export const useUploadTicketImagePair = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadTicketImagePair>>, TError,{data: BodyType<ImagePairUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadTicketImagePair>>,
+        TError,
+        {data: BodyType<ImagePairUploadBody>},
+        TContext
+      > => {
+      return useMutation(getUploadTicketImagePairMutationOptions(options));
+    }
+
+export const getGetTicketImageUploadUrl = (uploadId: string,) => {
+
+
+
+
+  return `/api/storage/uploads/image-pair/${uploadId}`
+}
+
+/**
+ * @summary Get the result of an idempotent image upload
+ */
+export const getTicketImageUpload = async (uploadId: string, options?: Parameters<typeof customFetch>[1]): Promise<TicketAttachment> => {
+
+  return customFetch<TicketAttachment>(getGetTicketImageUploadUrl(uploadId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTicketImageUploadQueryKey = (uploadId: string,) => {
+    return [
+    `/api/storage/uploads/image-pair/${uploadId}`
+    ] as const;
+    }
+
+
+export const getGetTicketImageUploadQueryOptions = <TData = Awaited<ReturnType<typeof getTicketImageUpload>>, TError = ErrorType<void>>(uploadId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTicketImageUpload>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTicketImageUploadQueryKey(uploadId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTicketImageUpload>>> = ({ signal }) => getTicketImageUpload(uploadId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: uploadId !== null && uploadId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTicketImageUpload>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTicketImageUploadQueryResult = NonNullable<Awaited<ReturnType<typeof getTicketImageUpload>>>
+export type GetTicketImageUploadQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the result of an idempotent image upload
+ */
+
+export function useGetTicketImageUpload<TData = Awaited<ReturnType<typeof getTicketImageUpload>>, TError = ErrorType<void>>(
+ uploadId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTicketImageUpload>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTicketImageUploadQueryOptions(uploadId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getMergeTicketUrl = (id: number,) => {
 

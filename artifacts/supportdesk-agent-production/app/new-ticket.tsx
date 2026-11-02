@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -21,17 +22,47 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useListAgents, useListTicketTemplates } from '@workspace/api-client-react';
-import { formatAttachmentSize, pickTicketFiles, uploadTicketFile } from '@/components/ticketAttachments';
+import {
+  createTicketUploadId,
+  formatAttachmentSize,
+  pickTicketFiles,
+  uploadTicketFile,
+} from '@/components/ticketAttachments';
+import type { PickedTicketFile, TicketUploadProgress } from '@/components/ticketAttachments';
 import type { TicketAttachment } from '@workspace/api-client-react';
 import { fetchWithFallback } from '@/lib/api';
 
 type DeviceTypeOption = { id: number; name: string };
 type OrganizationSite = { id: number; organizationId: number; name: string; address: string };
+type PendingAttachmentUpload = {
+  id: string;
+  file: PickedTicketFile;
+  status: 'queued' | 'preparing' | 'uploading' | 'failed';
+  progress: number | null;
+  error?: string;
+};
+
+const toLocalDateTimeInput = (date: Date) => {
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const mergePickedDateTime = (currentValue: string, pickedValue: Date, mode: 'date' | 'time') => {
+  const currentDate = currentValue ? new Date(currentValue) : new Date();
+  const nextDate = Number.isNaN(currentDate.getTime()) ? new Date() : currentDate;
+  if (mode === 'date') {
+    nextDate.setFullYear(pickedValue.getFullYear(), pickedValue.getMonth(), pickedValue.getDate());
+  } else {
+    nextDate.setHours(pickedValue.getHours(), pickedValue.getMinutes(), 0, 0);
+  }
+  return toLocalDateTimeInput(nextDate);
+};
 
 const PRIORITIES: TicketInput['priority'][] = ['low', 'normal', 'high', 'urgent'];
 const TYPES: TicketInput['type'][] = ['question', 'incident', 'problem', 'task'];
@@ -157,12 +188,15 @@ export default function NewTicketScreen() {
   const [sitesError, setSitesError] = useState('');
   const siteRequestSequence = useRef(0);
   const [scheduledAtInput, setScheduledAtInput] = useState('');
+  const [datePickerMode, setDatePickerMode] = useState<'date' | 'time' | null>(null);
+  const [datePickerDraft, setDatePickerDraft] = useState(new Date());
   const [requesterSearch, setRequesterSearch] = useState('');
   const [organizationSearch, setOrganizationSearch] = useState('');
   const [isRequesterDropdownOpen, setIsRequesterDropdownOpen] = useState(false);
   const [isOrganizationDropdownOpen, setIsOrganizationDropdownOpen] = useState(false);
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<PendingAttachmentUpload[]>([]);
   const [error, setError] = useState('');
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -257,33 +291,61 @@ export default function NewTicketScreen() {
     );
   }
 
-  const canSubmit = subject.trim().length > 0 && !createTicket.isPending;
+  const canSubmit = subject.trim().length > 0 && !createTicket.isPending && !isUploading && pendingUploads.length === 0;
+
+  const updatePendingUpload = (uploadId: string, update: Partial<PendingAttachmentUpload>) => {
+    setPendingUploads((current) => current.map((upload) =>
+      upload.id === uploadId ? { ...upload, ...update } : upload
+    ));
+  };
+
+  const processAttachmentUploads = async (uploads: PendingAttachmentUpload[]) => {
+    setIsUploading(true);
+    for (const upload of uploads) {
+      updatePendingUpload(upload.id, { status: 'preparing', progress: null, error: undefined });
+      try {
+        const attachment = await uploadTicketFile(upload.file, upload.id, (progress: TicketUploadProgress) => {
+          updatePendingUpload(upload.id, {
+            status: progress.stage,
+            progress: progress.progress,
+          });
+        });
+        setAttachments((current) => current.some((existing) => existing.objectPath === attachment.objectPath)
+          ? current
+          : [...current, attachment]);
+        setPendingUploads((current) => current.filter((pending) => pending.id !== upload.id));
+      } catch (requestError) {
+        updatePendingUpload(upload.id, {
+          status: 'failed',
+          progress: null,
+          error: requestError instanceof Error ? requestError.message : 'Upload failed.',
+        });
+      }
+    }
+    setIsUploading(false);
+  };
 
   const handlePickAttachment = async () => {
     setUploadError('');
-    const files = await pickTicketFiles();
-    if (!files.length) return;
+    try {
+      const files = await pickTicketFiles();
+      if (!files.length) return;
+      const uploads: PendingAttachmentUpload[] = files.map((file) => ({
+        id: createTicketUploadId(),
+        file,
+        status: 'queued',
+        progress: null,
+      }));
+      setPendingUploads((current) => [...current, ...uploads]);
+      await processAttachmentUploads(uploads);
+    } catch (requestError) {
+      setUploadError(requestError instanceof Error ? requestError.message : 'The selected files could not be opened.');
+    }
+  };
 
-    setIsUploading(true);
-    const uploaded: TicketAttachment[] = [];
-    const failures: string[] = [];
-    for (const file of files) {
-      try {
-        uploaded.push(await uploadTicketFile(file));
-      } catch (requestError) {
-        const reason = requestError instanceof Error ? requestError.message : 'Upload failed.';
-        failures.push(`${file.name}: ${reason}`);
-      }
-    }
-    if (uploaded.length) setAttachments((current) => [...current, ...uploaded]);
-    if (failures.length) {
-      setUploadError(
-        uploaded.length
-          ? `Uploaded ${uploaded.length} of ${files.length} files. Failed: ${failures.join(' ')}`
-          : failures.join(' '),
-      );
-    }
-    setIsUploading(false);
+  const retryAttachmentUpload = (uploadId: string) => {
+    const upload = pendingUploads.find((pending) => pending.id === uploadId);
+    if (upload && !isUploading) void processAttachmentUploads([upload]);
   };
 
   const loadOrganizationSites = async (orgId: number) => {
@@ -335,7 +397,41 @@ export default function NewTicketScreen() {
     }
   };
 
+  const openBookingDatePicker = (mode: 'date' | 'time') => {
+    const currentValue = scheduledAtInput ? new Date(scheduledAtInput) : new Date();
+    const value = Number.isNaN(currentValue.getTime()) ? new Date() : currentValue;
+
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value,
+        mode,
+        is24Hour: true,
+        onChange: (event: DateTimePickerEvent, selectedDate?: Date) => {
+          if (event.type === 'set' && selectedDate) {
+            setScheduledAtInput(mergePickedDateTime(scheduledAtInput, selectedDate, mode));
+          }
+        },
+      });
+      return;
+    }
+
+    setDatePickerDraft(value);
+    setDatePickerMode(mode);
+  };
+
+  const handleDatePickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (event.type === 'set' && selectedDate) setDatePickerDraft(selectedDate);
+  };
+
+  const confirmDatePicker = () => {
+    if (datePickerMode) {
+      setScheduledAtInput(mergePickedDateTime(scheduledAtInput, datePickerDraft, datePickerMode));
+    }
+    setDatePickerMode(null);
+  };
+
   return (
+    <>
     <KeyboardAwareScrollViewCompat
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={{
@@ -572,15 +668,53 @@ export default function NewTicketScreen() {
         ) : null}
 
         <Text style={[styles.label, { color: colors.foreground }]}>Booking date and time</Text>
-        <TextInput
-          value={scheduledAtInput}
-          onChangeText={setScheduledAtInput}
-          placeholder="YYYY-MM-DDTHH:mm"
-          placeholderTextColor={colors.mutedForeground}
-          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
-          accessibilityLabel="Booking date and time"
-        />
-        <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Optional. Enter the local appointment date and time.</Text>
+        {Platform.OS === 'web' ? (
+          <TextInput
+            value={scheduledAtInput}
+            onChangeText={setScheduledAtInput}
+            placeholder="YYYY-MM-DDTHH:mm"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            accessibilityLabel="Booking date and time"
+          />
+        ) : (
+          <View style={styles.bookingPickerRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Choose booking date"
+              onPress={() => openBookingDatePicker('date')}
+              style={[styles.bookingPickerButton, { backgroundColor: colors.card, borderColor: colors.input }]}
+            >
+              <Feather name="calendar" size={17} color={colors.primary} />
+              <Text style={[styles.bookingPickerText, { color: scheduledAtInput ? colors.foreground : colors.mutedForeground }]}>
+                {scheduledAtInput ? new Date(scheduledAtInput).toLocaleDateString() : 'Select date'}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Choose booking time"
+              onPress={() => openBookingDatePicker('time')}
+              style={[styles.bookingPickerButton, { backgroundColor: colors.card, borderColor: colors.input }]}
+            >
+              <Feather name="clock" size={17} color={colors.primary} />
+              <Text style={[styles.bookingPickerText, { color: scheduledAtInput ? colors.foreground : colors.mutedForeground }]}>
+                {scheduledAtInput ? new Date(scheduledAtInput).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Select time'}
+              </Text>
+            </Pressable>
+            {scheduledAtInput ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear booking date and time"
+                onPress={() => setScheduledAtInput('')}
+                hitSlop={8}
+                style={styles.clearBookingButton}
+              >
+                <Feather name="x-circle" size={20} color={colors.mutedForeground} />
+              </Pressable>
+            ) : null}
+          </View>
+        )}
+        <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Optional. Select the local appointment date and time.</Text>
         </View>
 
         <Text style={[styles.label, { color: colors.foreground }]}>Installation template</Text>
@@ -863,6 +997,43 @@ export default function NewTicketScreen() {
         ) : (
           <Text style={[styles.helperText, { color: colors.mutedForeground }]}>No files attached yet.</Text>
         )}
+        {pendingUploads.length ? (
+          <View style={styles.attachmentList}>
+            {pendingUploads.map((upload) => (
+              <View key={upload.id} style={[styles.attachmentRow, { backgroundColor: colors.card, borderColor: upload.status === 'failed' ? colors.destructive : colors.border }]}>
+                {upload.status === 'failed' ? (
+                  <Feather name="alert-circle" size={16} color={colors.destructive} />
+                ) : (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                )}
+                <View style={styles.attachmentInfo}>
+                  <Text style={[styles.attachmentName, { color: colors.foreground }]} numberOfLines={1}>{upload.file.name}</Text>
+                  <Text style={[styles.attachmentMeta, { color: upload.status === 'failed' ? colors.destructive : colors.mutedForeground }]}>
+                    {upload.status === 'failed'
+                      ? upload.error
+                      : upload.status === 'preparing'
+                        ? 'Preparing preview…'
+                        : upload.status === 'uploading' && upload.progress !== null
+                          ? `Uploading ${upload.progress}%`
+                          : upload.status === 'uploading'
+                            ? 'Uploading…'
+                            : 'Queued'}
+                  </Text>
+                </View>
+                {upload.status === 'failed' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Retry upload for ${upload.file.name}`}
+                    onPress={() => retryAttachmentUpload(upload.id)}
+                    disabled={isUploading}
+                  >
+                    <Text style={[styles.retryLinkText, { color: colors.primary }]}>Retry</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
         {uploadError ? <Text style={styles.error}>{uploadError}</Text> : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -930,6 +1101,47 @@ export default function NewTicketScreen() {
         </Pressable>
       </View>
     </KeyboardAwareScrollViewCompat>
+    <Modal
+      visible={Platform.OS === 'ios' && datePickerMode !== null}
+      animationType="fade"
+      transparent
+      onRequestClose={() => setDatePickerMode(null)}
+    >
+      <View style={[styles.datePickerOverlay, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={[styles.datePickerCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.datePickerTitle, { color: colors.foreground }]}>
+            {datePickerMode === 'date' ? 'Booking date' : 'Booking time'}
+          </Text>
+          {datePickerMode ? (
+            <DateTimePicker
+              value={datePickerDraft}
+              mode={datePickerMode}
+              display="spinner"
+              onChange={handleDatePickerChange}
+              is24Hour
+              style={styles.iosDateTimePicker}
+            />
+          ) : null}
+          <View style={styles.datePickerActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setDatePickerMode(null)}
+              style={[styles.datePickerSecondaryButton, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.datePickerButtonText, { color: colors.foreground }]}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={confirmDatePicker}
+              style={[styles.datePickerPrimaryButton, { backgroundColor: colors.primary }]}
+            >
+              <Text style={[styles.datePickerButtonText, { color: colors.primaryForeground }]}>Set {datePickerMode}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -983,6 +1195,18 @@ const styles = StyleSheet.create({
   retryLink: { alignSelf: 'flex-start', paddingVertical: 4, marginTop: 2 },
   retryLinkText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   input: { minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  bookingPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bookingPickerButton: { flex: 1, minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bookingPickerText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  clearBookingButton: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
+  datePickerOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.72)', justifyContent: 'center', paddingHorizontal: 20 },
+  datePickerCard: { width: '100%', maxWidth: 560, alignSelf: 'center', borderWidth: 1, borderRadius: 14, padding: 16, gap: 14 },
+  datePickerTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16 },
+  iosDateTimePicker: { alignSelf: 'stretch' },
+  datePickerActions: { flexDirection: 'row', gap: 10 },
+  datePickerSecondaryButton: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  datePickerPrimaryButton: { flex: 2, minHeight: 48, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  datePickerButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   selectTrigger: { minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   selectTriggerText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15 },
   dropdown: { borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 6 },

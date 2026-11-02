@@ -337,6 +337,7 @@ router.post("/units/:id/ticket", async (req, res) => {
     const ticketValues = {
       ...parsed,
       dueAt: parsed.dueAt ? new Date(parsed.dueAt) : null,
+      scheduledAt: parsed.scheduledAt ? new Date(parsed.scheduledAt) : null,
     };
     const ticket = await db.transaction(async (tx) => {
       const [raceCheck] = await tx.select({ id: ticketsTable.id }).from(ticketsTable).where(and(

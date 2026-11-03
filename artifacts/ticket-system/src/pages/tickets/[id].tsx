@@ -12,7 +12,10 @@ import {
   getListTicketsQueryKey,
   useListAgents,
   useListContacts,
+  useListTicketTemplates,
   type TicketAttachment,
+  type TicketTemplate,
+  type TicketTemplateField,
 } from "@workspace/api-client-react";
 import { useUpload } from "@workspace/object-storage-web";
 import { TicketStatus, TicketPriority } from "@workspace/api-client-react";
@@ -50,6 +53,100 @@ type TicketStockUsage = {
   quantity: number;
   deductedAt: string | null;
 };
+
+function normalizeTemplateFieldKey(value: unknown) {
+  const normalized = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const aliases: Record<string, string> = {
+    "reg no": "reg",
+    "reg number": "reg",
+    registration: "reg",
+    "vehicle registration": "reg",
+    "vesa num": "vesa",
+    "vesa number": "vesa",
+    "vesa no": "vesa",
+    her: "hrs",
+    hour: "hrs",
+    hours: "hrs",
+    hrs: "hrs",
+    "installation hours": "hrs",
+    "camera type": "deviceType",
+    cameratype: "deviceType",
+    "camera device type": "deviceType",
+    "device type": "deviceType",
+    devicetype: "deviceType",
+    "tracking type": "trackingType",
+    trackingtype: "trackingType",
+    "tracking device type": "trackingType",
+    "channel 1": "channel",
+    "channel 2": "channel",
+    "channel 3": "channel",
+    "channel 4": "channel",
+    "channel 5": "channel",
+    "channel 6": "channel",
+    "channel 7": "channel",
+    "channel 8": "channel",
+  };
+  return aliases[normalized] ?? normalized.replace(/\s+/g, "");
+}
+
+function getTemplateFields(template: TicketTemplate): TicketTemplateField[] {
+  const sourceFields = template.fields?.length
+    ? template.fields
+    : template.description.split(/\r?\n/).map((line) => {
+      const match = line.trim().match(/^([^:]+):\s*(.*)$/);
+      return match
+        ? { key: match[1].trim(), label: match[1].trim(), value: match[2].trim() }
+        : { key: line.trim(), label: line.trim() };
+    }).filter((field) => field.label);
+
+  return sourceFields
+    .map((field) => {
+      const key = normalizeTemplateFieldKey(field.label || field.key);
+      const normalizedKey = ["cameratype", "cameradevicetype", "devicetype"].includes(key.toLowerCase())
+        ? "deviceType"
+        : ["trackingtype", "trackingdevicetype"].includes(key.toLowerCase())
+          ? "trackingType"
+          : key;
+      return {
+        ...field,
+        key: normalizedKey,
+        label: normalizedKey === "channel" ? "Channel" : field.label || field.key || "Field",
+      };
+    })
+    .filter((field, index, fields) =>
+      field.key && fields.findIndex((candidate) => candidate.key === field.key) === index
+    );
+}
+
+function extractTemplateValues(description: string, fields: TicketTemplateField[]) {
+  const values: Record<string, string> = {};
+  const remainingLines: string[] = [];
+
+  for (const line of description.split(/\r?\n/)) {
+    const match = line.match(/^\s*([^:]+):\s*(.*)$/);
+    if (!match) {
+      remainingLines.push(line);
+      continue;
+    }
+
+    const label = normalizeTemplateFieldKey(match[1]);
+    const field = fields.find((candidate) =>
+      label === normalizeTemplateFieldKey(candidate.key)
+      || label === normalizeTemplateFieldKey(candidate.label)
+    );
+    if (!field) {
+      remainingLines.push(line);
+      continue;
+    }
+
+    values[field.key] = match[2].trim();
+  }
+
+  return {
+    values,
+    description: remainingLines.join("\n").trim(),
+  };
+}
 
 function renderTicketReferences(text: string) {
   return text.split(/(Ticket\s+#\d+|#\d+)/gi).map((part, index) => {
@@ -99,6 +196,156 @@ export default function TicketDetail() {
   const contactsQuery = useListContacts({ limit: 200 });
   const contacts = Array.isArray(contactsQuery.data?.data) ? contactsQuery.data.data : [];
   const agentsQuery = useListAgents();
+  const templatesQuery = useListTicketTemplates();
+  const activeTemplates = (templatesQuery.data ?? []).filter((template) => template.isActive);
+  const [templateInitializedForTicketId, setTemplateInitializedForTicketId] = useState<number | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [templateFields, setTemplateFields] = useState<TicketTemplateField[] | null>(null);
+  const [templateValues, setTemplateValues] = useState<Record<string, string>>({});
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [templateEditorDirty, setTemplateEditorDirty] = useState(false);
+  const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<Array<{ id: number; name: string }>>([]);
+  const [cameraDeviceTypes, setCameraDeviceTypes] = useState<Array<{ id: number; name: string }>>([]);
+  const [deviceTypesError, setDeviceTypesError] = useState("");
+  const [deviceTypesRetry, setDeviceTypesRetry] = useState(0);
+
+  useEffect(() => {
+    const loadDeviceTypes = async () => {
+      try {
+        const [trackingResponse, cameraResponse] = await Promise.all([
+          fetch(getApiUrl("/api/device-types?category=tracking"), { headers: getAuthHeaders() }),
+          fetch(getApiUrl("/api/device-types?category=camera"), { headers: getAuthHeaders() }),
+        ]);
+        if (!trackingResponse.ok || !cameraResponse.ok) {
+          throw new Error("Device types could not be loaded.");
+        }
+        const [trackingData, cameraData] = await Promise.all([trackingResponse.json(), cameraResponse.json()]);
+        setTrackingDeviceTypes(Array.isArray(trackingData) ? trackingData : []);
+        setCameraDeviceTypes(Array.isArray(cameraData) ? cameraData : []);
+        setDeviceTypesError("");
+      } catch (error) {
+        setDeviceTypesError(error instanceof Error ? error.message : "Device types could not be loaded.");
+      }
+    };
+    void loadDeviceTypes();
+  }, [deviceTypesRetry]);
+
+  useEffect(() => {
+    if (!ticket || !templatesQuery.isSuccess || templateInitializedForTicketId === ticket.id) return;
+
+    const savedValues = new Map<string, string>();
+    for (const savedField of ticket.templateData ?? []) {
+      const value = String(savedField.value ?? "");
+      savedValues.set(normalizeTemplateFieldKey(savedField.key), value);
+      savedValues.set(normalizeTemplateFieldKey(savedField.label), value);
+    }
+
+    const candidates = activeTemplates.map((template) => {
+      const fields = getTemplateFields(template);
+      const extracted = extractTemplateValues(String(ticket.description ?? ""), fields);
+      const savedMatches = fields.filter((field) =>
+        savedValues.has(normalizeTemplateFieldKey(field.key))
+        || savedValues.has(normalizeTemplateFieldKey(field.label))
+      ).length;
+      return { template, fields, extracted, score: savedMatches * 1000 + Object.keys(extracted.values).length };
+    }).filter((candidate) => candidate.fields.length && candidate.score > 0)
+      .sort((left, right) => right.score - left.score);
+
+    const matched = candidates[0];
+    if (matched) {
+      setSelectedTemplateId(matched.template.id);
+      setTemplateFields(matched.fields);
+      setTemplateValues(Object.fromEntries(matched.fields.map((field) => [
+        field.key,
+        savedValues.get(normalizeTemplateFieldKey(field.key))
+          ?? savedValues.get(normalizeTemplateFieldKey(field.label))
+          ?? matched.extracted.values[field.key]
+          ?? field.value
+          ?? "",
+      ])));
+      setTemplateDescription(matched.extracted.description);
+      setTemplateEditorDirty(false);
+    } else {
+      setSelectedTemplateId(null);
+      setTemplateFields(null);
+      setTemplateValues({});
+      setTemplateDescription(String(ticket.description ?? ""));
+      setTemplateEditorDirty(false);
+    }
+    setTemplateInitializedForTicketId(ticket.id);
+  }, [activeTemplates, templateInitializedForTicketId, templatesQuery.isSuccess, ticket]);
+
+  const applyTemplate = (templateId: string) => {
+    if (templateId === "none") {
+      const currentDetails = (templateFields ?? []).map((field) =>
+        `${field.label}: ${templateValues[field.key] ?? ""}`
+      );
+      setTemplateDescription((description) => [currentDetails.join("\n"), description].filter(Boolean).join("\n\n"));
+      setSelectedTemplateId(null);
+      setTemplateFields(null);
+      setTemplateValues({});
+      setTemplateEditorDirty(true);
+      return;
+    }
+
+    const template = activeTemplates.find((candidate) => String(candidate.id) === templateId);
+    if (!template) return;
+
+    const fields = getTemplateFields(template);
+    const extracted = extractTemplateValues(templateDescription || String(ticket?.description ?? ""), fields);
+    const savedValues = new Map<string, string>();
+    for (const savedField of ticket?.templateData ?? []) {
+      const value = String(savedField.value ?? "");
+      savedValues.set(normalizeTemplateFieldKey(savedField.key), value);
+      savedValues.set(normalizeTemplateFieldKey(savedField.label), value);
+    }
+    setSelectedTemplateId(template.id);
+    setTemplateFields(fields);
+    setTemplateValues(Object.fromEntries(fields.map((field) => [
+      field.key,
+      savedValues.get(normalizeTemplateFieldKey(field.key))
+        ?? savedValues.get(normalizeTemplateFieldKey(field.label))
+        ?? extracted.values[field.key]
+        ?? field.value
+        ?? "",
+    ])));
+    setTemplateDescription(extracted.description);
+    setTemplateEditorDirty(true);
+  };
+
+  const saveTemplateDetails = async () => {
+    if (!ticket) return;
+    const missing = (templateFields ?? []).filter((field) => field.required && !templateValues[field.key]?.trim());
+    if (missing.length) {
+      toast({
+        title: "Complete required template fields",
+        description: missing.map((field) => field.label).join(", "),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await updateTicket.mutateAsync({
+        id: ticketId,
+        data: {
+          description: templateDescription.trim(),
+          templateData: (templateFields ?? []).map((field) => ({
+            key: field.key,
+            label: field.label,
+            value: templateValues[field.key] ?? "",
+          })),
+        },
+      });
+      setTemplateEditorDirty(false);
+    } catch (error) {
+      toast({
+        title: "Could not save template details",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const updateTicket = useUpdateTicket({
     mutation: {
@@ -944,35 +1191,172 @@ export default function TicketDetail() {
 
             <div className="space-y-3 pt-4 border-t border-border">
               <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Template details</h3>
-              <div className="space-y-2">
-                {ticket.templateData?.length ? ticket.templateData.map((field) => (
-                  <div key={field.key} className="grid grid-cols-2 gap-2 text-sm">
-                    <span className="text-muted-foreground">{field.label}</span>
-                    <span className="font-medium break-words">{field.value || "—"}</span>
+              <div className="space-y-3">
+                <Select
+                  value={selectedTemplateId !== null
+                    ? String(selectedTemplateId)
+                    : templateEditorDirty
+                      ? "none"
+                      : ticket.templateData?.length
+                        ? "unmatched"
+                        : "none"}
+                  onValueChange={applyTemplate}
+                  disabled={templatesQuery.isLoading || templatesQuery.isError || updateTicket.isPending}
+                >
+                  <SelectTrigger aria-label="Select ticket template">
+                    <SelectValue placeholder={templatesQuery.isLoading ? "Loading templates..." : "Select template"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedTemplateId === null && !templateEditorDirty && ticket.templateData?.length ? (
+                      <SelectItem value="unmatched" disabled>Choose a template to edit saved fields</SelectItem>
+                    ) : null}
+                    <SelectItem value="none">No template</SelectItem>
+                    {activeTemplates.map((template) => (
+                      <SelectItem key={template.id} value={String(template.id)}>{template.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {templatesQuery.isError ? (
+                  <div className="text-sm text-destructive">
+                    <p>Templates could not be loaded.</p>
+                    <Button type="button" variant="link" size="sm" className="h-auto px-0" onClick={() => void templatesQuery.refetch()}>
+                      Retry
+                    </Button>
                   </div>
-                )) : [
-                  ["Fleet Num", ticket.fleetNum],
-                  ["Reg", ticket.reg],
-                  ["VIN", ticket.vin],
-                  ["Engine", ticket.engine],
-                  ["Make", ticket.make],
-                  ["Model", ticket.model],
-                  ["Colour", ticket.colour],
-                  ["ODO", ticket.odo],
-                  ["Device ID", ticket.deviceId],
-                  ["Device Cell No", ticket.deviceCellNo],
-                  ["Device Type", ticket.deviceType],
-                  ["Tracking IMEI", ticket.trackingImei],
-                  ["Tracking Cell Num", ticket.trackingCellNum],
-                  ["Tracking Type", ticket.trackingType],
-                  ["VESA NUM", ticket.vesaNum],
-                  ["HOURS", ticket.hours],
-                ].map(([label, value]) => value ? (
-                  <div key={label} className="grid grid-cols-2 gap-2 text-sm">
-                    <span className="text-muted-foreground">{label}</span>
-                    <span className="font-medium break-words">{value}</span>
+                ) : null}
+                {!templatesQuery.isLoading && !templatesQuery.isError && !activeTemplates.length ? (
+                  <p className="text-sm text-muted-foreground">No active templates available.</p>
+                ) : null}
+
+                {templateFields?.length ? (
+                  <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+                    {templateFields.map((field) => {
+                      const value = templateValues[field.key] ?? "";
+                      const isChannel = field.key === "channel";
+                      const isDeviceType = field.key === "deviceType" || field.key === "trackingType";
+                      const deviceOptions = field.key === "trackingType" ? trackingDeviceTypes : cameraDeviceTypes;
+                      const options = isChannel
+                        ? Array.from({ length: 8 }, (_, index) => `Channel ${index + 1}`)
+                        : deviceOptions.map((option) => option.name);
+                      const fieldOptions = value && isDeviceType && !options.includes(value)
+                        ? [value, ...options]
+                        : options;
+
+                      return (
+                        <div key={field.key} className="space-y-1.5">
+                          <Label htmlFor={`template-field-${field.key}`} className="text-xs">
+                            {field.label}{field.required ? " *" : ""}
+                          </Label>
+                          {isChannel || isDeviceType ? (
+                            <Select
+                              value={value || (isDeviceType ? "none" : "")}
+                              onValueChange={(nextValue) => {
+                                setTemplateValues((current) => ({ ...current, [field.key]: nextValue === "none" ? "" : nextValue }));
+                                setTemplateEditorDirty(true);
+                              }}
+                              disabled={updateTicket.isPending}
+                            >
+                              <SelectTrigger id={`template-field-${field.key}`}>
+                                <SelectValue placeholder={isChannel ? "Select channel" : "Select device type"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {isDeviceType ? <SelectItem value="none">No device selected</SelectItem> : null}
+                                {fieldOptions.map((option) => (
+                                  <SelectItem key={option} value={option}>{option}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              id={`template-field-${field.key}`}
+                              type={field.type === "number" ? "number" : field.type === "phone" ? "tel" : "text"}
+                              value={value}
+                              onChange={(event) => {
+                                setTemplateValues((current) => ({ ...current, [field.key]: event.target.value }));
+                                setTemplateEditorDirty(true);
+                              }}
+                              disabled={updateTicket.isPending}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                    {deviceTypesError ? (
+                      <div className="text-xs text-destructive">
+                        {deviceTypesError}{" "}
+                        <Button type="button" variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => setDeviceTypesRetry((retry) => retry + 1)}>
+                          Retry
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null)}
+                ) : ticket.templateData?.length ? (
+                  <div className="space-y-2">
+                    {ticket.templateData.map((field) => (
+                      <div key={field.key} className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">{field.label}</span>
+                        <span className="font-medium break-words">{field.value || "—"}</span>
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground">Select an active template above to edit these fields.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {[
+                      ["Fleet Num", ticket.fleetNum],
+                      ["Reg", ticket.reg],
+                      ["VIN", ticket.vin],
+                      ["Engine", ticket.engine],
+                      ["Make", ticket.make],
+                      ["Model", ticket.model],
+                      ["Colour", ticket.colour],
+                      ["ODO", ticket.odo],
+                      ["Device ID", ticket.deviceId],
+                      ["Device Cell No", ticket.deviceCellNo],
+                      ["Device Type", ticket.deviceType],
+                      ["Tracking IMEI", ticket.trackingImei],
+                      ["Tracking Cell Num", ticket.trackingCellNum],
+                      ["Tracking Type", ticket.trackingType],
+                      ["VESA NUM", ticket.vesaNum],
+                      ["HOURS", ticket.hours],
+                    ].map(([label, value]) => value ? (
+                      <div key={label} className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">{label}</span>
+                        <span className="font-medium break-words">{value}</span>
+                      </div>
+                    ) : null)}
+                  </div>
+                )}
+
+                {templateFields?.length ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ticket-template-description" className="text-xs">Additional description</Label>
+                      <Textarea
+                        id="ticket-template-description"
+                        value={templateDescription}
+                        onChange={(event) => {
+                          setTemplateDescription(event.target.value);
+                          setTemplateEditorDirty(true);
+                        }}
+                        rows={3}
+                        disabled={updateTicket.isPending}
+                      />
+                    </div>
+                  </>
+                ) : null}
+                {templateEditorDirty ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={updateTicket.isPending}
+                    onClick={() => void saveTemplateDetails()}
+                  >
+                    {updateTicket.isPending ? "Saving..." : "Save template details"}
+                  </Button>
+                ) : null}
               </div>
             </div>
 

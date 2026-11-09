@@ -69,6 +69,7 @@
   "dependencies": {
     "@react-native-community/datetimepicker": "9.1.0",
     "expo": "~57.0.20",
+    "expo-camera": "~57.0.6",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.6",
     "expo-image-manipulator": "~57.0.21",

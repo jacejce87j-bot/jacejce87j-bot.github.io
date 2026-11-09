@@ -25,6 +25,7 @@ import { Feather } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BarcodeScannerModal, isScannableTemplateField } from '@/components/BarcodeScannerModal';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useListAgents, useListTicketTemplates } from '@workspace/api-client-react';
@@ -204,6 +205,7 @@ export default function NewTicketScreen() {
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [templateFields, setTemplateFields] = useState<any[] | null>(null);
   const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
+  const [scannerTarget, setScannerTarget] = useState<{ key: string; label: string } | null>(null);
   const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
   const [cameraDeviceTypes, setCameraDeviceTypes] = useState<DeviceTypeOption[]>([]);
   const [deviceTypeError, setDeviceTypeError] = useState('');
@@ -856,13 +858,26 @@ export default function NewTicketScreen() {
                     </>
                   );
                 })() : (
-                  <TextInput
-                    value={templateFieldValues[f.key] ?? ''}
-                    onChangeText={(text) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: text }))}
-                    placeholder={f.label}
-                    placeholderTextColor={colors.mutedForeground}
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
-                  />
+                  <View style={styles.scannableInputRow}>
+                    <TextInput
+                      value={templateFieldValues[f.key] ?? ''}
+                      onChangeText={(text) => setTemplateFieldValues((prev) => ({ ...prev, [f.key]: text }))}
+                      placeholder={f.label}
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[styles.input, styles.scannableInput, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
+                    />
+                    {isScannableTemplateField(f.key, f.label) ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Scan ${f.label}`}
+                        onPress={() => setScannerTarget({ key: f.key, label: f.label })}
+                        style={[styles.scanButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                      >
+                        <Feather name="maximize" size={19} color={colors.primary} />
+                        <Text style={[styles.scanButtonText, { color: colors.primary }]}>Scan</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 )}
               </View>
                   ))}
@@ -1141,6 +1156,17 @@ export default function NewTicketScreen() {
         </View>
       </View>
     </Modal>
+    <BarcodeScannerModal
+      visible={scannerTarget !== null}
+      fieldLabel={scannerTarget?.label ?? 'code'}
+      onClose={() => setScannerTarget(null)}
+      onScanned={(value) => {
+        if (scannerTarget) {
+          setTemplateFieldValues((current) => ({ ...current, [scannerTarget.key]: value }));
+        }
+        setScannerTarget(null);
+      }}
+    />
     </>
   );
 }
@@ -1195,6 +1221,10 @@ const styles = StyleSheet.create({
   retryLink: { alignSelf: 'flex-start', paddingVertical: 4, marginTop: 2 },
   retryLinkText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   input: { minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  scannableInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  scannableInput: { flex: 1 },
+  scanButton: { minHeight: 50, minWidth: 76, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10 },
+  scanButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   bookingPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bookingPickerButton: { flex: 1, minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
   bookingPickerText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13 },

@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { BarcodeScannerModal, isScannableTemplateField } from '@/components/BarcodeScannerModal';
 import {
   getListTicketsQueryKey,
   getListAgentsQueryKey,
@@ -120,6 +121,41 @@ const normalizeEditTemplateFieldKey = (value: unknown) => {
   return aliases[normalized] ?? normalized.replace(/\s+/g, '');
 };
 
+type TicketTemplateFieldData = { key?: string | null; label?: string | null; value?: string | null };
+
+const getTicketAssetIdentifiers = (templateData?: TicketTemplateFieldData[] | null) => {
+  let registration: string | undefined;
+  let fleetNumber: string | undefined;
+
+  for (const field of templateData ?? []) {
+    const keys = [field.key, field.label].map(normalizeEditTemplateFieldKey);
+    const value = field.value?.trim();
+    if (!value) continue;
+
+    if (!registration && keys.some((key) => [
+      'reg',
+      'regno',
+      'regnumber',
+      'registrationno',
+      'registrationnumber',
+      'vehiclereg',
+      'vehicleregistration',
+      'vehicleregistrationnumber',
+      'platenumber',
+      'numberplate',
+      'licenseplate',
+    ].includes(key))) {
+      registration = value;
+    }
+
+    if (!fleetNumber && keys.some((key) => ['fleet', 'fleetno', 'fleetnum', 'fleetnumber'].includes(key))) {
+      fleetNumber = value;
+    }
+  }
+
+  return { registration, fleetNumber };
+};
+
 const getEditTemplateFields = (template: any) => {
   const explicitFields = Array.isArray(template?.fields) ? template.fields : [];
   const sourceFields = explicitFields.length
@@ -184,6 +220,66 @@ const normalizeEditTemplateDeviceField = (field: any) => {
     return { ...field, key: 'trackingType' };
   }
   return field;
+};
+
+type EditTemplateFieldGroupId = 'vehicle' | 'hardware' | 'camera' | 'other';
+type EditTemplateFieldGroup = {
+  id: EditTemplateFieldGroupId;
+  title: string;
+  fields: any[];
+};
+
+const EDIT_TEMPLATE_FIELD_GROUPS: Array<Pick<EditTemplateFieldGroup, 'id' | 'title'>> = [
+  { id: 'vehicle', title: 'Vehicle Identity' },
+  { id: 'hardware', title: 'Hardware & Telemetry' },
+  { id: 'camera', title: 'Camera Configuration' },
+  { id: 'other', title: 'Other Details' },
+];
+
+const getEditTemplateFieldGroup = (field: any): EditTemplateFieldGroupId => {
+  const key = String(field.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const label = String(field.label || field.name || '').toLowerCase();
+  const normalizedLabel = label.replace(/[^a-z0-9]/g, '');
+
+  if ([
+    'fleetnum', 'fleetnumber', 'reg', 'registration', 'vin', 'engine',
+    'make', 'model', 'colour', 'color', 'odo', 'odometer',
+  ].includes(key) || /\b(vehicle|fleet|registration|vin|engine|make|model|colour|color|odometer)\b/.test(label)) {
+    return 'vehicle';
+  }
+
+  if (
+    key === 'channel' ||
+    key.includes('vesa') ||
+    /camera|channel|vesa|hikvision|mdvr|dvr|recorder/.test(normalizedLabel)
+  ) {
+    return 'camera';
+  }
+
+  if (
+    ['devicetype', 'trackingtype'].includes(key) ||
+    /imei|cell|sim|device|tracking|serial|hardware|icc/.test(normalizedLabel)
+  ) {
+    return 'hardware';
+  }
+
+  return 'other';
+};
+
+const groupEditTemplateFields = (fields: any[]): EditTemplateFieldGroup[] =>
+  EDIT_TEMPLATE_FIELD_GROUPS.map((group) => ({
+    ...group,
+    fields: fields.filter((field) => getEditTemplateFieldGroup(field) === group.id),
+  })).filter((group) => group.fields.length > 0);
+
+const getInitialExpandedEditTemplateSections = (fields: any[] = []): Record<EditTemplateFieldGroupId, boolean> => {
+  const firstGroup = groupEditTemplateFields(fields)[0]?.id ?? 'vehicle';
+  return {
+    vehicle: firstGroup === 'vehicle',
+    hardware: firstGroup === 'hardware',
+    camera: firstGroup === 'camera',
+    other: firstGroup === 'other',
+  };
 };
 
 const STATUS_OPTIONS = ['new', 'open', 'pending', 'solved', 'closed'];
@@ -306,6 +402,10 @@ export default function AgentHomeScreen() {
   const [editTemplatePickerOpen, setEditTemplatePickerOpen] = useState(false);
   const [editTemplateFields, setEditTemplateFields] = useState<any[] | null>(null);
   const [editTemplateValues, setEditTemplateValues] = useState<Record<string, string>>({});
+  const [scannerTarget, setScannerTarget] = useState<{ key: string; label: string } | null>(null);
+  const [expandedEditTemplateSections, setExpandedEditTemplateSections] = useState<Record<EditTemplateFieldGroupId, boolean>>(
+    () => getInitialExpandedEditTemplateSections(),
+  );
   const [editTemplateInitializedForTicketId, setEditTemplateInitializedForTicketId] = useState<number | null>(null);
   const [trackingDeviceTypes, setTrackingDeviceTypes] = useState<DeviceTypeOption[]>([]);
   const [cameraDeviceTypes, setCameraDeviceTypes] = useState<DeviceTypeOption[]>([]);
@@ -321,6 +421,10 @@ export default function AgentHomeScreen() {
   const [stockQuantity, setStockQuantity] = useState('1');
   const [isSavingStockUsage, setIsSavingStockUsage] = useState(false);
   const selectedFieldAgent = fieldAgents.find((agent) => agent.id === selectedFieldAgentId) ?? null;
+  const groupedEditTemplateFields = useMemo(
+    () => groupEditTemplateFields(editTemplateFields ?? []),
+    [editTemplateFields],
+  );
 
   useEffect(() => {
     let active = true;
@@ -431,6 +535,7 @@ export default function AgentHomeScreen() {
     if (matched) {
       setEditTemplateId(matched.template.id);
       setEditTemplateFields(matched.fields);
+      setExpandedEditTemplateSections(getInitialExpandedEditTemplateSections(matched.fields));
       setEditTemplateValues(Object.fromEntries(matched.fields.map((field: any) => [
         field.key,
         savedValues.get(normalizeEditTemplateFieldKey(field.key))
@@ -609,6 +714,7 @@ export default function AgentHomeScreen() {
     setEditTemplatePickerOpen(false);
 
     const templateFields = getEditTemplateFields(template).map(normalizeEditTemplateDeviceField);
+    setExpandedEditTemplateSections(getInitialExpandedEditTemplateSections(templateFields));
     if (templateFields.length) {
       setEditTemplateFields(templateFields);
       const savedValues = new Map<string, string>();
@@ -649,6 +755,11 @@ export default function AgentHomeScreen() {
       if (editTemplateFields && editTemplateFields.length) {
         const missing = editTemplateFields.filter((field) => field.required && !(editTemplateValues[field.key]?.trim()));
         if (missing.length) {
+          const missingGroups = new Set(missing.map(getEditTemplateFieldGroup));
+          setExpandedEditTemplateSections((current) => ({
+            ...current,
+            ...Object.fromEntries([...missingGroups].map((group) => [group, true])),
+          }));
           Alert.alert('Template required', `Please complete the required fields: ${missing.map((field) => field.label).join(', ')}`);
           return;
         }
@@ -1039,11 +1150,17 @@ export default function AgentHomeScreen() {
           </Text>
         </View>
 
-        <View style={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
           {(['all', 'active', 'open', 'pending', 'on_hold', 'solved', 'closed'] as const).map((filter) => (
             <Pressable
               key={filter}
               onPress={() => setStatusFilter(filter)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: statusFilter === filter }}
               style={[
                 styles.filterChip,
                 { borderColor: colors.border, backgroundColor: statusFilter === filter ? colors.primary : colors.card },
@@ -1054,7 +1171,7 @@ export default function AgentHomeScreen() {
               </Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
 
         {agentsQuery.isError ? (
           <View style={[styles.agentWarning, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1088,7 +1205,9 @@ export default function AgentHomeScreen() {
           </View>
         ) : filteredMyTickets.length ? (
           <View style={styles.ticketList}>
-            {filteredMyTickets.map((ticket) => (
+            {filteredMyTickets.map((ticket) => {
+              const assetIdentifiers = getTicketAssetIdentifiers(ticket.templateData);
+              return (
               <View key={ticket.id} style={[styles.ticketCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.ticketTopRow}>
                   <Text style={[styles.ticketId, { color: colors.primary }]}>#{ticket.id}</Text>
@@ -1096,6 +1215,22 @@ export default function AgentHomeScreen() {
                   <Text style={[styles.ticketStatus, { color: colors.mutedForeground }]}>{ticket.status?.replace('_', ' ')}</Text>
                 </View>
                 <Text style={[styles.ticketSubject, { color: colors.foreground }]} numberOfLines={2}>{ticket.subject}</Text>
+                {assetIdentifiers.registration || assetIdentifiers.fleetNumber ? (
+                  <View style={styles.assetBadgeRow}>
+                    {assetIdentifiers.registration ? (
+                      <View style={[styles.assetBadge, { backgroundColor: colors.accent, borderColor: colors.primary }]}>
+                        <Text style={[styles.assetBadgeLabel, { color: colors.primary }]}>REG</Text>
+                        <Text style={[styles.assetBadgeValue, { color: colors.accentForeground }]}>{assetIdentifiers.registration}</Text>
+                      </View>
+                    ) : null}
+                    {assetIdentifiers.fleetNumber ? (
+                      <View style={[styles.assetBadge, { backgroundColor: colors.accent, borderColor: colors.primary }]}>
+                        <Text style={[styles.assetBadgeLabel, { color: colors.primary }]}>FLEET</Text>
+                        <Text style={[styles.assetBadgeValue, { color: colors.accentForeground }]}>{assetIdentifiers.fleetNumber}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
                 <Text style={[styles.ticketMeta, { color: colors.mutedForeground }]}>
                   {ticket.priority} priority · {ticket.type}
                 </Text>
@@ -1262,7 +1397,8 @@ export default function AgentHomeScreen() {
                   </View>
                 ) : null}
               </View>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1776,8 +1912,34 @@ export default function AgentHomeScreen() {
             )}
 
             {editTemplateFields && editTemplateFields.length ? (
-              <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}> 
-                {editTemplateFields.map((field) => (
+              <View style={[styles.templateFieldGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {groupedEditTemplateFields.map((group) => {
+                  const expanded = expandedEditTemplateSections[group.id];
+                  const requiredCount = group.fields.filter((field) => field.required).length;
+                  return (
+                    <View key={group.id} style={[styles.templateAccordion, { borderColor: colors.border }]}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`${group.title}, ${group.fields.length} fields${requiredCount ? `, ${requiredCount} required` : ''}`}
+                        accessibilityState={{ expanded }}
+                        onPress={() => setExpandedEditTemplateSections((current) => ({
+                          ...current,
+                          [group.id]: !current[group.id],
+                        }))}
+                        style={styles.templateAccordionHeader}
+                      >
+                        <View style={styles.templateAccordionHeading}>
+                          <Text style={[styles.templateAccordionTitle, { color: colors.foreground }]}>{group.title}</Text>
+                          <Text style={[styles.templateAccordionSummary, { color: colors.mutedForeground }]}>
+                            {group.fields.length} {group.fields.length === 1 ? 'field' : 'fields'}
+                            {requiredCount ? ` · ${requiredCount} required` : ''}
+                          </Text>
+                        </View>
+                        <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+                      </Pressable>
+                      {expanded ? (
+                        <View style={styles.templateAccordionFields}>
+                          {group.fields.map((field) => (
                   <View key={field.key} style={{ gap: 6 }}>
                     <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>{field.label}{field.required ? ' *' : ''}</Text>
                     {/^(channel|trackingType|deviceType)$/.test(field.key) ? (() => {
@@ -1838,16 +2000,34 @@ export default function AgentHomeScreen() {
                         </>
                       );
                     })() : (
-                      <TextInput
-                        style={[styles.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                        value={editTemplateValues[field.key] ?? ''}
-                        onChangeText={(text) => setEditTemplateValues((current) => ({ ...current, [field.key]: text }))}
-                        placeholder={field.label}
-                        placeholderTextColor={colors.mutedForeground}
-                      />
+                      <View style={styles.scannableInputRow}>
+                        <TextInput
+                          style={[styles.textInput, styles.scannableInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                          value={editTemplateValues[field.key] ?? ''}
+                          onChangeText={(text) => setEditTemplateValues((current) => ({ ...current, [field.key]: text }))}
+                          placeholder={field.label}
+                          placeholderTextColor={colors.mutedForeground}
+                        />
+                        {isScannableTemplateField(field.key, field.label) ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Scan ${field.label}`}
+                            onPress={() => setScannerTarget({ key: field.key, label: field.label })}
+                            style={[styles.scanButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                          >
+                            <Feather name="maximize" size={19} color={colors.primary} />
+                            <Text style={[styles.scanButtonText, { color: colors.primary }]}>Scan</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
                     )}
                   </View>
-                ))}
+                          ))}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
                 {deviceTypeError ? (
                   <View style={styles.deviceTypeErrorRow}>
                     <Text style={[styles.error, { flex: 1 }]}>{deviceTypeError}</Text>
@@ -2044,6 +2224,17 @@ export default function AgentHomeScreen() {
           </View>
         </View>
       </Modal>
+      <BarcodeScannerModal
+        visible={scannerTarget !== null}
+        fieldLabel={scannerTarget?.label ?? 'code'}
+        onClose={() => setScannerTarget(null)}
+        onScanned={(value) => {
+          if (scannerTarget) {
+            setEditTemplateValues((current) => ({ ...current, [scannerTarget.key]: value }));
+          }
+          setScannerTarget(null);
+        }}
+      />
     </View>
   );
 }
@@ -2066,8 +2257,8 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 18 },
   sectionMeta: { fontFamily: 'Inter_500Medium', fontSize: 12 },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  filterRow: { flexDirection: 'row', gap: 8, marginTop: 8, paddingRight: 4 },
+  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, flexShrink: 0 },
   filterChipText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   ticketList: { gap: 10 },
   ticketCard: { borderRadius: 8, borderWidth: 1, padding: 14 },
@@ -2076,6 +2267,10 @@ const styles = StyleSheet.create({
   ticketOrg: { fontFamily: 'Inter_500Medium', fontSize: 11, textAlign: 'center', flex: 1 },
   ticketStatus: { fontFamily: 'Inter_500Medium', fontSize: 11, textTransform: 'capitalize' },
   ticketSubject: { fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 20 },
+  assetBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  assetBadge: { minHeight: 26, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  assetBadgeLabel: { fontFamily: 'Inter_700Bold', fontSize: 9, letterSpacing: 0.5 },
+  assetBadgeValue: { fontFamily: 'Inter_700Bold', fontSize: 11 },
   ticketMeta: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 7, textTransform: 'capitalize' },
   emptyCard: { borderRadius: 8, borderWidth: 1, paddingVertical: 34, paddingHorizontal: 24, alignItems: 'center' },
   emptyIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
@@ -2160,6 +2355,16 @@ const styles = StyleSheet.create({
   textInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter_400Regular', fontSize: 14 },
   textAreaInput: { height: 100, textAlignVertical: 'top' },
   templateFieldGroup: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 8 },
+  templateAccordion: { borderBottomWidth: StyleSheet.hairlineWidth },
+  templateAccordionHeader: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 8, paddingHorizontal: 2 },
+  templateAccordionHeading: { flex: 1, gap: 3 },
+  templateAccordionTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  templateAccordionSummary: { fontFamily: 'Inter_400Regular', fontSize: 11 },
+  templateAccordionFields: { gap: 12, paddingBottom: 12, paddingTop: 4 },
+  scannableInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  scannableInput: { flex: 1 },
+  scanButton: { minHeight: 46, minWidth: 76, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10 },
+  scanButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   selectTrigger: { minHeight: 46, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   selectTriggerText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14 },
   dropdown: { borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 6 },

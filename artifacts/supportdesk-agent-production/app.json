@@ -17,7 +17,15 @@
     },
     "plugins": [
       "./plugins/withNetworkSecurityConfig.js",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Orion SupportDesk to use your camera to scan vehicle and device codes.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

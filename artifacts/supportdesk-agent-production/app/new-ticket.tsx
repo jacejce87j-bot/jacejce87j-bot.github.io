@@ -26,6 +26,7 @@ import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from 
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarcodeScannerModal, isScannableTemplateField } from '@/components/BarcodeScannerModal';
+import { mapVehicleLicenceBarcodeToTemplateFields } from '@/components/vehicleLicenceBarcode';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useColors } from '@/hooks/useColors';
 import { useListAgents, useListTicketTemplates } from '@workspace/api-client-react';
@@ -1162,7 +1163,10 @@ export default function NewTicketScreen() {
       onClose={() => setScannerTarget(null)}
       onScanned={(value) => {
         if (scannerTarget) {
-          setTemplateFieldValues((current) => ({ ...current, [scannerTarget.key]: value }));
+          const decodedFields = mapVehicleLicenceBarcodeToTemplateFields(value, templateFields ?? []);
+          setTemplateFieldValues((current) => decodedFields
+            ? { ...current, ...decodedFields }
+            : { ...current, [scannerTarget.key]: value });
         }
         setScannerTarget(null);
       }}

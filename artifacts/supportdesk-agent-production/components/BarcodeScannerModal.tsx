@@ -30,8 +30,21 @@ const BARCODE_TYPES: BarcodeType[] = [
 export function isScannableTemplateField(key: string, label = '') {
   const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
   const normalizedLabel = label.toLowerCase();
-  return ['vin', 'deviceid', 'trackingimei', 'imei', 'serialnumber', 'serial'].includes(normalizedKey)
-    || /\b(vin|imei|serial number|serial no|device id|asset id)\b/.test(normalizedLabel);
+  return [
+    'vin',
+    'reg',
+    'regno',
+    'regnumber',
+    'registration',
+    'registrationnumber',
+    'vehicleregistration',
+    'deviceid',
+    'trackingimei',
+    'imei',
+    'serialnumber',
+    'serial',
+  ].includes(normalizedKey)
+    || /\b(vin|reg|registration|imei|serial number|serial no|device id|asset id)\b/.test(normalizedLabel);
 }
 
 type Props = {

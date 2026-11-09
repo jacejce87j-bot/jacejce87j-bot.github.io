@@ -22,6 +22,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { BarcodeScannerModal, isScannableTemplateField } from '@/components/BarcodeScannerModal';
+import { mapVehicleLicenceBarcodeToTemplateFields } from '@/components/vehicleLicenceBarcode';
 import {
   getListTicketsQueryKey,
   getListAgentsQueryKey,
@@ -2230,7 +2231,10 @@ export default function AgentHomeScreen() {
         onClose={() => setScannerTarget(null)}
         onScanned={(value) => {
           if (scannerTarget) {
-            setEditTemplateValues((current) => ({ ...current, [scannerTarget.key]: value }));
+            const decodedFields = mapVehicleLicenceBarcodeToTemplateFields(value, editTemplateFields ?? []);
+            setEditTemplateValues((current) => decodedFields
+              ? { ...current, ...decodedFields }
+              : { ...current, [scannerTarget.key]: value });
           }
           setScannerTarget(null);
         }}

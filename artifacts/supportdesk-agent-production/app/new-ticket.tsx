@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -263,7 +264,7 @@ export default function NewTicketScreen() {
     },
   });
   const contactsQuery = useListContacts({ q: requesterSearch || undefined, limit: 25 });
-  const organizationsQuery = useListOrganizations({ q: organizationSearch || undefined, limit: 25 });
+  const organizationsQuery = useListOrganizations({ q: organizationSearch || undefined, limit: 100 });
 
   const createTicket = useCreateTicket({
     mutation: {
@@ -558,60 +559,6 @@ export default function NewTicketScreen() {
           </Text>
           <Feather name={isOrganizationDropdownOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
         </Pressable>
-        {isOrganizationDropdownOpen ? (
-          <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <TextInput
-              value={organizationSearch}
-              onChangeText={(value) => {
-                setOrganizationSearch(value);
-                setOrganizationId(null);
-                setSelectedOrganizationAddress('');
-                siteRequestSequence.current += 1;
-                setOrganizationSites([]);
-                setSelectedSiteId(null);
-                setSitesError('');
-                setSitesLoading(false);
-              }}
-              placeholder="Search organizations"
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.dropdownSearch, { backgroundColor: colors.background, borderColor: colors.input, color: colors.foreground }]}
-              accessibilityLabel="Search organizations"
-            />
-            {organizationsQuery.isLoading ? (
-              <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>Searching organizations…</Text>
-            ) : organizationsQuery.isError ? (
-              <Pressable onPress={() => void organizationsQuery.refetch()} style={styles.retryLink}>
-                <Text style={[styles.retryLinkText, { color: colors.primary }]}>Organizations could not be loaded. Tap to retry.</Text>
-              </Pressable>
-            ) : (organizationsQuery.data?.data ?? []).length ? (
-              <ScrollView style={styles.dropdownOptions} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                {(organizationsQuery.data?.data ?? []).map((organization) => (
-                  <Pressable
-                    key={organization.id}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      setOrganizationId(organization.id);
-                      setSelectedOrganizationLabel(organization.name);
-                      setSelectedOrganizationAddress(organization.address ?? '');
-                      setOrganizationSearch('');
-                      setIsOrganizationDropdownOpen(false);
-                      void loadOrganizationSites(organization.id);
-                    }}
-                    style={({ pressed }) => [
-                      styles.dropdownOption,
-                      { borderColor: colors.border },
-                      pressed && { backgroundColor: colors.accent },
-                    ]}
-                  >
-                    <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{organization.name}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : (
-              <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>No organizations found.</Text>
-            )}
-          </View>
-        ) : null}
 
         {sitesLoading ? (
           <Text style={[styles.helperText, { color: colors.mutedForeground }]}>Loading organization sites…</Text>
@@ -1118,6 +1065,98 @@ export default function NewTicketScreen() {
       </View>
     </KeyboardAwareScrollViewCompat>
     <Modal
+      visible={isOrganizationDropdownOpen}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={() => setIsOrganizationDropdownOpen(false)}
+    >
+      <KeyboardAvoidingView
+        style={[styles.organizationPickerContainer, {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom + 12,
+        }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={[styles.organizationPickerHeader, { borderBottomColor: colors.border }]}>
+          <View style={styles.organizationPickerHeading}>
+            <Text style={[styles.organizationPickerTitle, { color: colors.foreground }]}>Select organization</Text>
+            <Text style={[styles.organizationPickerSubtitle, { color: colors.mutedForeground }]}>
+              Search or scroll to find an organization.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close organization picker"
+            onPress={() => setIsOrganizationDropdownOpen(false)}
+            hitSlop={10}
+            style={styles.organizationPickerClose}
+          >
+            <Feather name="x" size={23} color={colors.foreground} />
+          </Pressable>
+        </View>
+        <TextInput
+          value={organizationSearch}
+          onChangeText={(value) => {
+            setOrganizationSearch(value);
+            setOrganizationId(null);
+            setSelectedOrganizationAddress('');
+            siteRequestSequence.current += 1;
+            setOrganizationSites([]);
+            setSelectedSiteId(null);
+            setSitesError('');
+            setSitesLoading(false);
+          }}
+          placeholder="Search organizations"
+          placeholderTextColor={colors.mutedForeground}
+          style={[styles.organizationPickerSearch, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Search organizations"
+        />
+        {organizationsQuery.isLoading ? (
+          <View style={styles.organizationPickerMessage}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>Searching organizations…</Text>
+          </View>
+        ) : organizationsQuery.isError ? (
+          <Pressable onPress={() => void organizationsQuery.refetch()} style={styles.retryLink}>
+            <Text style={[styles.retryLinkText, { color: colors.primary }]}>Organizations could not be loaded. Tap to retry.</Text>
+          </Pressable>
+        ) : (organizationsQuery.data?.data ?? []).length ? (
+          <ScrollView
+            style={styles.organizationPickerOptions}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            {(organizationsQuery.data?.data ?? []).map((organization) => (
+              <Pressable
+                key={organization.id}
+                accessibilityRole="button"
+                onPress={() => {
+                  setOrganizationId(organization.id);
+                  setSelectedOrganizationLabel(organization.name);
+                  setSelectedOrganizationAddress(organization.address ?? '');
+                  setOrganizationSearch('');
+                  setIsOrganizationDropdownOpen(false);
+                  void loadOrganizationSites(organization.id);
+                }}
+                style={({ pressed }) => [
+                  styles.dropdownOption,
+                  { borderColor: colors.border },
+                  pressed && { backgroundColor: colors.accent },
+                ]}
+              >
+                <Text style={[styles.dropdownOptionText, { color: colors.foreground }]}>{organization.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : (
+          <Text style={[styles.dropdownMessage, { color: colors.mutedForeground }]}>No organizations found.</Text>
+        )}
+      </KeyboardAvoidingView>
+    </Modal>
+    <Modal
       visible={Platform.OS === 'ios' && datePickerMode !== null}
       animationType="fade"
       transparent
@@ -1249,6 +1288,15 @@ const styles = StyleSheet.create({
   dropdownOption: { minHeight: 46, borderBottomWidth: StyleSheet.hairlineWidth, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8 },
   dropdownOptionText: { fontFamily: 'Inter_400Regular', fontSize: 14 },
   dropdownMessage: { padding: 12, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  organizationPickerContainer: { flex: 1, paddingBottom: 12 },
+  organizationPickerHeader: { minHeight: 76, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  organizationPickerHeading: { flex: 1, gap: 4 },
+  organizationPickerTitle: { fontFamily: 'Inter_700Bold', fontSize: 18 },
+  organizationPickerSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 12 },
+  organizationPickerClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  organizationPickerSearch: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, marginHorizontal: 16, marginTop: 14, marginBottom: 8, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  organizationPickerOptions: { flex: 1, marginHorizontal: 16 },
+  organizationPickerMessage: { minHeight: 100, alignItems: 'center', justifyContent: 'center' },
   deviceTypeErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   multilineInput: { minHeight: 120, paddingTop: 14 },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
